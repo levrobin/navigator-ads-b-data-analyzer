@@ -226,7 +226,7 @@ class IcaoGraphs:
         self.plot_modes = ['altitude', 'speed', 'altitude_speed_combined', 
                            'latitude', 'course', 'track', 'altitude_diff', 'baro_correction', 
                            'reg05_msg_intervals', 'reg06_msg_intervals', 'reg08_msg_intervals', 
-                           'reg09_msg_intervals', 'reg61_msg_intervals', 'reg62_msg_intervals',
+                           'reg09_1_msg_intervals', 'reg61_msg_intervals', 'reg62_msg_intervals',
                            'reg65_msg_intervals']
         self.plot_mode_idx = 0
         self.ylims = {mode: {} for mode in self.plot_modes}
@@ -485,7 +485,7 @@ class IcaoGraphs:
                 intervals = np.diff(timestamps) * 1000
                 intervals = intervals[intervals >= 0]
                 if len(intervals) > 0:
-                    data_to_plot.append((intervals, f"Местоположение в воздухе", 'blue'))
+                    data_to_plot.append((intervals, 'blue'))
 
             if not data_to_plot:
                 self.ax.text(0.5, 0.5, f"Нет данных о местоположении в воздухе для {icao}", ha='center', va='center')
@@ -499,39 +499,60 @@ class IcaoGraphs:
                 low = center - dev
                 high = center + dev
 
-                intervals_in_range = intervals[(intervals >= low) & (intervals <= high)]
-                count_in_range = len(intervals_in_range)
+                left = intervals[intervals < low]
+                middle = intervals[(intervals >= low) & (intervals <= high)]
+                right = intervals[intervals > high]
 
-                
-                if count_in_range == 0:
-                    self.ax.clear()
-                    self.ax.text(0.5, 0.5, 
-                                f"Нет данных в диапазоне {low}-{high} мс для {icao}\n",
-                                ha='center', va='center')
-                    self.has_plot_data = False
-                    self.fig.canvas.draw_idle()
-                    return
+                bar_width = (high - low) / num_bins
 
                 # гистограмма
-                for intervals, label, color in data_to_plot:
-                    bin_edges = np.linspace(low, high, num_bins + 1)
+                for intervals, color in data_to_plot:
+                    bin_edges = np.concatenate((
+                        [0],
+                        np.linspace(low, high, num_bins + 1)
+                    ))
                     self.ax.hist(
-                        intervals,
+                        middle,
                         bins=bin_edges,
                         alpha=0.6,
                         color=color,
                         edgecolor='black',
-                        label=f"{label} ({count_in_range} интервалов)"
+                        label=f"400-600: {len(middle)}"
+                    )
+
+                    self.ax.bar(
+                        low - bar_width,
+                        len(left),
+                        width=bar_width,
+                        align='edge',
+                        color='mediumblue',
+                        edgecolor='black',
+                        label=f"0–400: {len(left)}"
+                    )
+
+                    self.ax.bar(
+                        high,
+                        len(right),
+                        width=bar_width,
+                        align='edge',
+                        color='mediumblue',
+                        edgecolor='black',
+                        label=f"> 600: {len(right)}"
                     )
                 
                 callsign = self.icao_callsigns.get(icao, "N/A")
                 display_id = f"{callsign} ({icao})" if callsign != "N/A" else icao
-                
+
+                self.ax.set_xlim(low - bar_width, high + bar_width)
+                self.ax.axvline(low,  linestyle='--', color='black', alpha=0.8)
+                self.ax.axvline(high, linestyle='--', color='black', alpha=0.8)
                 self.ax.set_xlabel('Интервал между сообщениями (мс)')
                 self.ax.set_ylabel('Количество')
                 self.ax.set_title(f'Распределение интервалов сообщений сквиттера местоположения в воздухе {display_id} (REG05)')
 
-                self.ax.legend()
+                self.ax.legend(
+                    title=f"Всего интервалов {len(intervals)}"
+                )
                 self.ax.grid(True, linestyle='--', alpha=0.7)
                 self.has_plot_data = True
                 self.fig.canvas.draw_idle()
@@ -544,7 +565,7 @@ class IcaoGraphs:
                 intervals = np.diff(timestamps) * 1000
                 intervals = intervals[intervals >= 0]
                 if len(intervals) > 0:
-                    data_to_plot.append((intervals, f"Местоположение на земле", 'red'))
+                    data_to_plot.append((intervals, 'red'))
 
             if not data_to_plot:
                 self.ax.text(0.5, 0.5, f"Нет данных о местоположении на земле для {icao}", ha='center', va='center')
@@ -558,38 +579,60 @@ class IcaoGraphs:
                 low = center - dev
                 high = center + dev
 
-                intervals_in_range = intervals[(intervals >= low) & (intervals <= high)]
-                count_in_range = len(intervals_in_range)
+                left = intervals[intervals < low]
+                middle = intervals[(intervals >= low) & (intervals <= high)]
+                right = intervals[intervals > high]
 
-                if count_in_range == 0:
-                    self.ax.clear()
-                    self.ax.text(0.5, 0.5, 
-                                f"Нет данных в диапазоне {low}-{high} мс для {icao}\n",
-                                ha='center', va='center')
-                    self.has_plot_data = False
-                    self.fig.canvas.draw_idle()
-                    return
+                bar_width = (high - low) / num_bins
 
-
-                for intervals, label, color in data_to_plot:
-                    bin_edges = np.linspace(low, high, num_bins + 1)
+                # гистограмма
+                for intervals, color in data_to_plot:
+                    bin_edges = np.concatenate((
+                        [0],
+                        np.linspace(low, high, num_bins + 1)
+                    ))
                     self.ax.hist(
-                        intervals,
+                        middle,
                         bins=bin_edges,
                         alpha=0.6,
                         color=color,
                         edgecolor='black',
-                        label=f"{label} ({count_in_range} интервалов)"
+                        label=f"400-600: {len(middle)}"
+                    )
+
+                    self.ax.bar(
+                        low - bar_width,
+                        len(left),
+                        width=bar_width,
+                        align='edge',
+                        color='firebrick',
+                        edgecolor='black',
+                        label=f"0–400: {len(left)}"
+                    )
+
+                    self.ax.bar(
+                        high,
+                        len(right),
+                        width=bar_width,
+                        align='edge',
+                        color='firebrick',
+                        edgecolor='black',
+                        label=f"> 600: {len(right)}"
                     )
                 
                 callsign = self.icao_callsigns.get(icao, "N/A")
                 display_id = f"{callsign} ({icao})" if callsign != "N/A" else icao
                 
+                self.ax.set_xlim(low - bar_width, high + bar_width)
+                self.ax.axvline(low,  linestyle='--', color='black', alpha=0.8)
+                self.ax.axvline(high, linestyle='--', color='black', alpha=0.8)
                 self.ax.set_xlabel('Интервал между сообщениями (мс)')
                 self.ax.set_ylabel('Количество')
                 self.ax.set_title(f'Распределение интервалов сообщений сквиттера местоположения на земле {display_id} (REG06)')
 
-                self.ax.legend()
+                self.ax.legend(
+                    title=f"Всего интервалов {len(intervals)}"
+                )
                 self.ax.grid(True, linestyle='--', alpha=0.7)
                 self.has_plot_data = True
                 self.fig.canvas.draw_idle()
@@ -602,7 +645,7 @@ class IcaoGraphs:
                 intervals = np.diff(timestamps) * 1000
                 intervals = intervals[intervals >= 0]
                 if len(intervals) > 0:
-                    data_to_plot.append((intervals, f"Опознавательный код и категория", 'cyan'))
+                    data_to_plot.append((intervals, 'cyan'))
 
             if not data_to_plot:
                 self.ax.text(0.5, 0.5, f"Нет данных об опознавательном коде и категории для {icao}", ha='center', va='center')
@@ -616,44 +659,67 @@ class IcaoGraphs:
                 low = center - dev
                 high = center + dev
 
-                intervals_in_range = intervals[(intervals >= low) & (intervals <= high)]
-                count_in_range = len(intervals_in_range)
+                left = intervals[intervals < low]
+                middle = intervals[(intervals >= low) & (intervals <= high)]
+                right = intervals[intervals > high]
 
-                if count_in_range == 0:
-                    self.ax.clear()
-                    self.ax.text(0.5, 0.5, 
-                                f"Нет данных в диапазоне {low}-{high} мс для {icao}\n",
-                                ha='center', va='center')
-                    self.has_plot_data = False
-                    self.fig.canvas.draw_idle()
-                    return
+                bar_width = (high - low) / num_bins
 
-                # параметры для гистограммы
-                for intervals, label, color in data_to_plot:
-                    bin_edges = np.linspace(low, high, num_bins + 1)
-                    
+                # гистограмма
+                for intervals, color in data_to_plot:
+                    bin_edges = np.concatenate((
+                        [0],
+                        np.linspace(low, high, num_bins + 1)
+                    ))
                     self.ax.hist(
-                        intervals,
+                        middle,
                         bins=bin_edges,
                         alpha=0.6,
                         color=color,
                         edgecolor='black',
-                        label=f"{label} ({count_in_range} интервалов)"
+                        label=f"400-600: {len(middle)}"
+                    )
+
+                    self.ax.bar(
+                        low - bar_width,
+                        len(left),
+                        width=bar_width,
+                        align='edge',
+                        color='skyblue',
+                        edgecolor='black',
+                        label=f"0–400: {len(left)}"
+                    )
+
+                    self.ax.bar(
+                        high,
+                        len(right),
+                        width=bar_width,
+                        align='edge',
+                        color='skyblue',
+                        edgecolor='black',
+                        label=f"> 600: {len(right)}"
                     )
                 
                 callsign = self.icao_callsigns.get(icao, "N/A")
                 display_id = f"{callsign} ({icao})" if callsign != "N/A" else icao
                 
+                self.ax.set_xlim(low - bar_width, high + bar_width)
+                self.ax.axvline(low,  linestyle='--', color='black', alpha=0.8)
+                self.ax.axvline(high, linestyle='--', color='black', alpha=0.8)
                 self.ax.set_xlabel('Интервал между сообщениями (мс)')
                 self.ax.set_ylabel('Количество')
                 self.ax.set_title(f'Распределение интервалов сообщений сквиттера опознавательного кода и категории {display_id} (REG08)')
 
-                self.ax.legend()
+                self.ax.legend(
+                    title=f"Всего интервалов {len(intervals)}"
+                )
                 self.ax.grid(True, linestyle='--', alpha=0.7)
                 self.has_plot_data = True
                 self.fig.canvas.draw_idle()
   
-        elif mode == 'reg09_msg_intervals':
+        # edit this part
+
+        elif mode == 'reg09_1_msg_intervals':
             data_to_plot = []
             
             if icao in self.icao_airborne_speed_ts and len(self.icao_airborne_speed_ts[icao]) > 1:
@@ -661,7 +727,7 @@ class IcaoGraphs:
                 intervals = np.diff(timestamps) * 1000
                 intervals = intervals[intervals >= 0]
                 if len(intervals) > 0:
-                    data_to_plot.append((intervals, f"Скорость при нахождении в воздухе", 'limegreen'))
+                    data_to_plot.append((intervals, 'lime'))
 
             if not data_to_plot:
                 self.ax.text(0.5, 0.5, f"Нет данных о скорости при нахождении в воздухе для {icao}", ha='center', va='center')
@@ -675,34 +741,65 @@ class IcaoGraphs:
                 low = center - dev
                 high = center + dev
 
-                intervals_in_range = intervals[(intervals >= low) & (intervals <= high)]
-                count_in_range = len(intervals_in_range)
+                left = intervals[intervals < low]
+                middle = intervals[(intervals >= low) & (intervals <= high)]
+                right = intervals[intervals > high]
 
-                if count_in_range == 0:
-                    self.ax.clear()
-                    self.ax.text(0.5, 0.5, 
-                                f"Нет данных в диапазоне {low}-{high} мс для {icao}\n",
-                                ha='center', va='center')
-                    self.has_plot_data = False
-                    self.fig.canvas.draw_idle()
-                    return
+                bar_width = (high - low) / num_bins
 
-                for intervals, label, color in data_to_plot:
-                    bin_edges = np.linspace(low, high, num_bins + 1)
-                    self.ax.hist(intervals, bins=bin_edges, alpha=0.6, 
-                                label=f"{label} ({count_in_range} интервалов)", 
-                                color=color, edgecolor='black', density=False)
+                # гистограмма
+                for intervals, color in data_to_plot:
+                    bin_edges = np.concatenate((
+                        [0],
+                        np.linspace(low, high, num_bins + 1)
+                    ))
+                    self.ax.hist(
+                        middle,
+                        bins=bin_edges,
+                        alpha=0.6,
+                        color=color,
+                        edgecolor='black',
+                        label=f"400-600: {len(middle)}"
+                    )
+
+                    self.ax.bar(
+                        low - bar_width,
+                        len(left),
+                        width=bar_width,
+                        align='edge',
+                        color='mediumseagreen',
+                        edgecolor='black',
+                        label=f"0–400: {len(left)}"
+                    )
+
+                    self.ax.bar(
+                        high,
+                        len(right),
+                        width=bar_width,
+                        align='edge',
+                        color='mediumseagreen',
+                        edgecolor='black',
+                        label=f"> 600: {len(right)}"
+                    )
                     
                 # настройки графика
                 callsign = self.icao_callsigns.get(icao, "N/A")
                 display_id = f"{callsign} ({icao})" if callsign != "N/A" else icao
+                
+                self.ax.set_xlim(low - bar_width, high + bar_width)
+                self.ax.axvline(low,  linestyle='--', color='black', alpha=0.8)
+                self.ax.axvline(high, linestyle='--', color='black', alpha=0.8)
                 self.ax.set_xlabel('Интервал между сообщениями (мс)')
                 self.ax.set_ylabel('Частота встречаемости сообщения')
                 self.ax.set_title(f'Распределение интервалов сообщений сквиттера скорости при нахождении в воздухе: {display_id} (REG09)')
-                self.ax.legend()
+                self.ax.legend(
+                    title=f"Всего интервалов {len(intervals)}"
+                )
                 self.ax.grid(True, linestyle='--', alpha=0.7)
                 self.has_plot_data = True
                 self.fig.canvas.draw_idle()
+        
+        # edit this part
 
         elif mode == 'reg61_msg_intervals':
             data_to_plot = []
@@ -712,7 +809,7 @@ class IcaoGraphs:
                 intervals = np.diff(timestamps) * 1000
                 intervals = intervals[intervals >= 0]
                 if len(intervals) > 0:
-                    data_to_plot.append((intervals, f"Статус воздушного судна", 'darkviolet'))
+                    data_to_plot.append((intervals, 'darkviolet'))
 
             if not data_to_plot:
                 self.ax.text(0.5, 0.5, f"Нет данных о статусе воздушного судна для {icao}", ha='center', va='center')
@@ -726,38 +823,60 @@ class IcaoGraphs:
                 low = center - dev
                 high = center + dev
 
-                intervals_in_range = intervals[(intervals >= low) & (intervals <= high)]
-                count_in_range = len(intervals_in_range)
+                left = intervals[intervals < low]
+                middle = intervals[(intervals >= low) & (intervals <= high)]
+                right = intervals[intervals > high]
 
-                if count_in_range == 0:
-                    self.ax.clear()
-                    self.ax.text(0.5, 0.5, 
-                                f"Нет данных в диапазоне {low}-{high} мс для {icao}\n",
-                                ha='center', va='center')
-                    self.has_plot_data = False
-                    self.fig.canvas.draw_idle()
-                    return
+                bar_width = (high - low) / num_bins
 
-                for intervals, label, color in data_to_plot:
-                    bin_edges = np.linspace(low, high, num_bins + 1)
-                    
+                # гистограмма
+                for intervals, color in data_to_plot:
+                    bin_edges = np.concatenate((
+                        [0],
+                        np.linspace(low, high, num_bins + 1)
+                    ))
                     self.ax.hist(
-                        intervals,
+                        middle,
                         bins=bin_edges,
                         alpha=0.6,
                         color=color,
                         edgecolor='black',
-                        label=f"{label} ({count_in_range} интервалов)"
+                        label=f"400-600: {len(middle)}"
+                    )
+
+                    self.ax.bar(
+                        low - bar_width,
+                        len(left),
+                        width=bar_width,
+                        align='edge',
+                        color='indigo',
+                        edgecolor='black',
+                        label=f"0–400: {len(left)}"
+                    )
+
+                    self.ax.bar(
+                        high,
+                        len(right),
+                        width=bar_width,
+                        align='edge',
+                        color='indigo',
+                        edgecolor='black',
+                        label=f"> 600: {len(right)}"
                     )
                 
                 callsign = self.icao_callsigns.get(icao, "N/A")
                 display_id = f"{callsign} ({icao})" if callsign != "N/A" else icao
                 
+                self.ax.set_xlim(low - bar_width, high + bar_width)
+                self.ax.axvline(low,  linestyle='--', color='black', alpha=0.8)
+                self.ax.axvline(high, linestyle='--', color='black', alpha=0.8)
                 self.ax.set_xlabel('Интервал между сообщениями (мс)')
                 self.ax.set_ylabel('Количество')
                 self.ax.set_title(f'Распределение интервалов сообщений сквиттера статуса {display_id} (REG61)')
 
-                self.ax.legend()
+                self.ax.legend(
+                    title=f"Всего интервалов {len(intervals)}"
+                )
                 self.ax.grid(True, linestyle='--', alpha=0.7)
                 self.has_plot_data = True
                 self.fig.canvas.draw_idle()
@@ -770,7 +889,7 @@ class IcaoGraphs:
                 intervals = np.diff(timestamps) * 1000
                 intervals = intervals[intervals >= 0]
                 if len(intervals) > 0:
-                    data_to_plot.append((intervals, f"Состояние и статус цели", 'orange'))
+                    data_to_plot.append((intervals, 'gold'))
 
             if not data_to_plot:
                 self.ax.text(0.5, 0.5, f"Нет данных о состоянии и статусе цели для {icao}", ha='center', va='center')
@@ -784,38 +903,60 @@ class IcaoGraphs:
                 low = center - dev
                 high = center + dev
 
-                intervals_in_range = intervals[(intervals >= low) & (intervals <= high)]
-                count_in_range = len(intervals_in_range)
+                left = intervals[intervals < low]
+                middle = intervals[(intervals >= low) & (intervals <= high)]
+                right = intervals[intervals > high]
 
-                if count_in_range == 0:
-                    self.ax.clear()
-                    self.ax.text(0.5, 0.5, 
-                                f"Нет данных в диапазоне {low}-{high} мс для {icao}\n",
-                                ha='center', va='center')
-                    self.has_plot_data = False
-                    self.fig.canvas.draw_idle()
-                    return
+                bar_width = (high - low) / num_bins
 
-                for intervals, label, color in data_to_plot:
-                    bin_edges = np.linspace(low, high, num_bins + 1)
-                    
+                # гистограмма
+                for intervals, color in data_to_plot:
+                    bin_edges = np.concatenate((
+                        [0],
+                        np.linspace(low, high, num_bins + 1)
+                    ))
                     self.ax.hist(
-                        intervals,
+                        middle,
                         bins=bin_edges,
                         alpha=0.6,
                         color=color,
                         edgecolor='black',
-                        label=f"{label} ({count_in_range} интервалов)"
+                        label=f"400-600: {len(middle)}"
+                    )
+
+                    self.ax.bar(
+                        low - bar_width,
+                        len(left),
+                        width=bar_width,
+                        align='edge',
+                        color='darkorange',
+                        edgecolor='black',
+                        label=f"0–400: {len(left)}"
+                    )
+
+                    self.ax.bar(
+                        high,
+                        len(right),
+                        width=bar_width,
+                        align='edge',
+                        color='darkorange',
+                        edgecolor='black',
+                        label=f"> 600: {len(right)}"
                     )
                 
                 callsign = self.icao_callsigns.get(icao, "N/A")
                 display_id = f"{callsign} ({icao})" if callsign != "N/A" else icao
                 
+                self.ax.set_xlim(low - bar_width, high + bar_width)
+                self.ax.axvline(low,  linestyle='--', color='black', alpha=0.8)
+                self.ax.axvline(high, linestyle='--', color='black', alpha=0.8)
                 self.ax.set_xlabel('Интервал между сообщениями (мс)')
                 self.ax.set_ylabel('Количество')
                 self.ax.set_title(f'Распределение интервалов сообщений сквиттера состояния и статуса цели {display_id} (REG62)')
 
-                self.ax.legend()
+                self.ax.legend(
+                    title=f"Всего интервалов {len(intervals)}"
+                )
                 self.ax.grid(True, linestyle='--', alpha=0.7)
                 self.has_plot_data = True
                 self.fig.canvas.draw_idle()
@@ -828,7 +969,7 @@ class IcaoGraphs:
                 intervals = np.diff(timestamps) * 1000
                 intervals = intervals[intervals >= 0]
                 if len(intervals) > 0:
-                    data_to_plot.append((intervals, f"Эксплуатационный статус", 'mediumaquamarine'))
+                    data_to_plot.append((intervals, 'mediumaquamarine'))
 
             if not data_to_plot:
                 self.ax.text(0.5, 0.5, f"Нет данных об эксплуатационном статусе для {icao}", ha='center', va='center')
@@ -842,37 +983,60 @@ class IcaoGraphs:
                 low = center - dev
                 high = center + dev
 
-                intervals_in_range = intervals[(intervals >= low) & (intervals <= high)]
-                count_in_range = len(intervals_in_range)
+                left = intervals[intervals < low]
+                middle = intervals[(intervals >= low) & (intervals <= high)]
+                right = intervals[intervals > high]
 
-                if count_in_range == 0:
-                    self.ax.clear()
-                    self.ax.text(0.5, 0.5, 
-                                f"Нет данных в диапазоне {low}-{high} мс для {icao}\n",
-                                ha='center', va='center')
-                    self.has_plot_data = False
-                    self.fig.canvas.draw_idle()
-                    return
+                bar_width = (high - low) / num_bins
 
-                for intervals, label, color in data_to_plot:
-                    bin_edges = np.linspace(low, high, num_bins + 1)
+                # гистограмма
+                for intervals, color in data_to_plot:
+                    bin_edges = np.concatenate((
+                        [0],
+                        np.linspace(low, high, num_bins + 1)
+                    ))
                     self.ax.hist(
-                        intervals,
+                        middle,
                         bins=bin_edges,
                         alpha=0.6,
                         color=color,
                         edgecolor='black',
-                        label=f"{label} ({count_in_range} интервалов)"
+                        label=f"400-600: {len(middle)}"
+                    )
+
+                    self.ax.bar(
+                        low - bar_width,
+                        len(left),
+                        width=bar_width,
+                        align='edge',
+                        color='lightseagreen',
+                        edgecolor='black',
+                        label=f"0–400: {len(left)}"
+                    )
+
+                    self.ax.bar(
+                        high,
+                        len(right),
+                        width=bar_width,
+                        align='edge',
+                        color='lightseagreen',
+                        edgecolor='black',
+                        label=f"> 600: {len(right)}"
                     )
                 
                 callsign = self.icao_callsigns.get(icao, "N/A")
                 display_id = f"{callsign} ({icao})" if callsign != "N/A" else icao
                 
+                self.ax.set_xlim(low - bar_width, high + bar_width)
+                self.ax.axvline(low,  linestyle='--', color='black', alpha=0.8)
+                self.ax.axvline(high, linestyle='--', color='black', alpha=0.8)
                 self.ax.set_xlabel('Интервал между сообщениями (мс)')
                 self.ax.set_ylabel('Количество')
                 self.ax.set_title(f'Распределение интервалов сообщений сквиттера эксплуатационного статуса {display_id} (REG65)')
 
-                self.ax.legend()
+                self.ax.legend(
+                    title=f"Всего интервалов {len(intervals)}"
+                )
                 self.ax.grid(True, linestyle='--', alpha=0.7)
                 self.has_plot_data = True
                 self.fig.canvas.draw_idle()
