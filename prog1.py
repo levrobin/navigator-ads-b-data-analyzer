@@ -70,7 +70,7 @@ def get_altitude(msg_str):
         if df not in [17, 18]: return None
         # проверяем, что это сообщение о положении (тип 9-18)
         tc = pms.adsb.typecode(msg_str)
-        if 9 <= tc <= 18:
+        if 9 <= tc <= 18 or 20 <= tc <= 22:
             return pms.adsb.altitude(msg_str)
         return None
     except:
@@ -188,7 +188,10 @@ def get_callsign(msg_str):
 
 # класс для создания и управления окном с графиками
 class IcaoGraphs:
-    def __init__(self, alt_dict, spd_dict, pos_dict, course_dict, adsb_icao_list, icao_callsigns, icao_sel_alt, icao_alt_diff, icao_baro_correction):
+    def __init__(self, alt_dict, spd_dict, pos_dict, course_dict, adsb_icao_list, icao_callsigns, 
+                 icao_sel_alt, icao_alt_diff, icao_baro_correction, 
+                 icao_airborne_pos_ts=None, icao_surface_pos_ts=None, icao_identification=None, icao_airborne_speed_ts=None,
+                 icao_status=None, icao_target_state=None, icao_operation_status=None):
         # все icao, по которым есть какие-либо данные для отображения
         icao_with_data = set(alt_dict.keys()) | set(spd_dict.keys()) | set(pos_dict.keys()) | set(course_dict.keys())
         self.icao_list = sorted(list(icao_with_data.intersection(adsb_icao_list)))
@@ -209,15 +212,22 @@ class IcaoGraphs:
         self.sel_alt_dict = icao_sel_alt if icao_sel_alt else {}
         self.alt_diff_dict = icao_alt_diff if icao_alt_diff else {}
         self.baro_correction_dict = icao_baro_correction if icao_baro_correction else {} 
+
+        self.icao_airborne_pos_ts = icao_airborne_pos_ts if icao_airborne_pos_ts else {}
+        self.icao_surface_pos_ts = icao_surface_pos_ts if icao_surface_pos_ts else {}
+        self.icao_identification = icao_identification if icao_identification else {}
+        self.icao_airborne_speed_ts = icao_airborne_speed_ts if icao_airborne_speed_ts else {}
+        self.icao_status = icao_status if icao_status else {}
+        self.icao_target_state = icao_target_state if icao_target_state else {}
+        self.icao_operation_status = icao_operation_status if icao_operation_status else {}
         self.icao_index = 0
         
         # список доступных режимов (типов графиков)
         self.plot_modes = ['altitude', 'speed', 'altitude_speed_combined', 
-                           'latitude', 'course', 'track', 'altitude_diff', 
-                           'baro_correction', 'alt_msg_intervals', 
-                           'spd_msg_intervals', 'course_msg_intervals',
-                           'sel_alt_msg_intervals', 'alt_diff_msg_intervals',
-                           'baro_corr_msg_intervals']
+                           'latitude', 'course', 'track', 'altitude_diff', 'baro_correction', 
+                           'reg05_msg_intervals', 'reg06_msg_intervals', 'reg08_msg_intervals', 
+                           'reg09_msg_intervals', 'reg61_msg_intervals', 'reg62_msg_intervals',
+                           'reg65_msg_intervals']
         self.plot_mode_idx = 0
         self.ylims = {mode: {} for mode in self.plot_modes}
 
@@ -279,24 +289,24 @@ class IcaoGraphs:
         # принудительно сбрасываем соотношение сторон к стандартному ('auto')
         self.ax.set_aspect('auto')
 
-        # если нет данных, выводим сообщение и выходим
+        # если нет данных
         if not self.icao_list:
             self.ax.text(0.5, 0.5, "Нет бортов с данными для отображения", ha='center', va='center')
             self.fig.canvas.draw_idle()
             return
 
-        # получаем текущий выбранный icao и режим (тип графика)
+        # текущий выбранный icao и режим (тип графика)
         icao = self.icao_list[self.icao_index]
         mode = self.plot_modes[self.plot_mode_idx]
         
-        # формирование заголовка с позывным и активными режимами автопилота
+        # заголовок с позывным и активными режимами автопилота
         callsign = self.icao_callsigns.get(icao, "N/A")
         modes_key = f"{icao}_modes"
         active_modes = self.icao_callsigns.get(modes_key, set())
         mode_str = f" ({', '.join(sorted(active_modes))})" if active_modes else ""
         display_id = f"{callsign} ({icao}){mode_str}" if callsign != "N/A" else f"{icao}{mode_str}"
         
-        # инициализация переменных для подписей
+        # переменные для подписей
         data = None
         label = ""
         title = ""
@@ -304,29 +314,48 @@ class IcaoGraphs:
         # блок отрисовки графика высоты 
         if mode == 'altitude':
             # получаем данные о высоте для текущего icao
-            data = self.alt_dict.get(icao)
-            sel_data = self.sel_alt_dict.get(icao)
+            data = self.alt_dict.get(icao, [])
+            sel_data = self.sel_alt_dict.get(icao, []) 
             title, label = f"Высота: {display_id}", "Высота (футы)"
             # если данных нет, выводим сообщение
             if not data and not sel_data:
                 self.ax.text(0.5, 0.5, f"Нет данных о высоте для борта {icao}", ha='center', va='center')
                 self.has_plot_data = False
             else:
-                # отрисовка барометрической высоты
-                if data:
-                    times = [timestamp_to_utc(t) for t, v in sorted(data)]
-                    values = [v for t, v in sorted(data)]
-                    self.ax.plot(times, values, 'o-', markersize=3, label='Барометрическая высота', color='blue')
-                # отрисовка выбранной высоты (ступенчатый график)
+                # баро и GNSS высоты
+                baro_times, baro_values = [], []
+                gnss_times, gnss_values = [], []
+                
+                for t, v, alt_type in sorted(data):
+                    if alt_type == 'baro':
+                        baro_times.append(timestamp_to_utc(t))
+                        baro_values.append(v)
+                    elif alt_type == 'gnss':
+                        gnss_times.append(timestamp_to_utc(t))
+                        gnss_values.append(v)
+                
+                # отрисовка баро высоты
+                if baro_times:
+                    self.ax.plot(baro_times, baro_values, 'o-', markersize=3, 
+                                label='Барометрическая высота', color='blue')
+                
+                # отрисовка GNSS высоты
+                if gnss_times:
+                    self.ax.plot(gnss_times, gnss_values, 's-', markersize=4, 
+                                label='GNSS высота', color='cyan', alpha=0.7)
+                
+                # отрисовка выбранной высоты
                 if sel_data:
                     times = [timestamp_to_utc(t) for t, v in sorted(sel_data)]
                     values = [v for t, v in sorted(sel_data)]
-                    self.ax.step(times, values, where='post', label='Выбранная высота', color='red', linestyle='--')
+                    self.ax.step(times, values, where='post', label='Выбранная высота', 
+                                color='red', linestyle='--')
+                
                 self.has_plot_data = True
         
         # блок отрисовки графика скорости 
         elif mode == 'speed':
-            data = self.spd_dict.get(icao)
+            data = self.spd_dict.get(icao, [])
             title, label = f"Скорость: {display_id}", "Скорость (узлы)"
             if not data:
                 self.ax.text(0.5, 0.5, f"Нет данных о скорости для борта {icao}", ha='center', va='center')
@@ -359,8 +388,14 @@ class IcaoGraphs:
                 # отрисовка данных и сбор информации для общей легенды
                 lines1, labels1, lines2, labels2 = [], [], [], []
                 if alt_data:
-                    alt_times = [timestamp_to_utc(t) for t, v in sorted(alt_data)]
-                    alt_values = [v for t, v in sorted(alt_data)]
+                    # alt_times = [timestamp_to_utc(t) for t, v in sorted(alt_data)]
+                    # alt_values = [v for t, v in sorted(alt_data)]
+
+                    alt_times = []
+                    alt_values = []
+                    for t, v, alt_type in sorted(alt_data):
+                        alt_times.append(timestamp_to_utc(t))
+                        alt_values.append(v)
                     line, = self.ax.plot(alt_times, alt_values, 'o-', markersize=3, label='Высота', color='blue')
                     lines1.append(line)
                     labels1.append('Высота')
@@ -376,7 +411,7 @@ class IcaoGraphs:
 
         # блок отрисовки графика широты 
         elif mode == 'latitude':
-            data = self.pos_dict.get(icao)
+            data = self.pos_dict.get(icao, [])
             title, label = f"Координаты: {display_id}", "Широта (°)"
             if not data:
                 self.ax.text(0.5, 0.5, f"Нет данных о координатах для борта {icao}", ha='center', va='center')
@@ -389,7 +424,7 @@ class IcaoGraphs:
 
         # блок отрисовки графика курса 
         elif mode == 'course':
-            data = self.course_dict.get(icao)
+            data = self.course_dict.get(icao, [])
             title, label = f"Курс: {display_id}", "Курс (°)"
             if not data:
                 self.ax.text(0.5, 0.5, f"Нет данных о курсе для борта {icao}", ha='center', va='center')
@@ -402,7 +437,7 @@ class IcaoGraphs:
 
         # блок отрисовки трека полёта (карты)
         elif mode == 'track':
-            data = self.pos_dict.get(icao)
+            data = self.pos_dict.get(icao, [])
             title = f"Схема трека полёта: {display_id}"
             if not data:
                 self.ax.text(0.5, 0.5, f"Нет данных о координатах для борта {icao}", ha='center', va='center')
@@ -414,7 +449,7 @@ class IcaoGraphs:
 
         # блок отрисовки графика разницы высот 
         elif mode == 'altitude_diff':
-            data = self.alt_diff_dict.get(icao)
+            data = self.alt_diff_dict.get(icao, [])
             title, label = f"Разница высот (DIF_FROM_BARO_ALT): {display_id}", "Разница высот (футы)"
             
             if not data:
@@ -429,7 +464,7 @@ class IcaoGraphs:
 
         # блок отрисовки графика барокоррекции 
         elif mode == 'baro_correction':
-            data = self.baro_correction_dict.get(icao)
+            data = self.baro_correction_dict.get(icao, [])
             title, label = f"Барокоррекция: {display_id}", "Давление (гПа)"
             
             if not data:
@@ -442,75 +477,220 @@ class IcaoGraphs:
                 self.ax.axhline(y=1013.25, color='green', linestyle='--', alpha=0.7, label='Стандартное давление (1013.25 гПа)')
                 self.has_plot_data = True
 
-        # блоки отрисовки гистограммы распределения интервалов по типам сквиттеров
-        elif mode == 'alt_msg_intervals':
-            # данные для гистограммы
+        # блоки отрисовки гистограмм распределения интервалов по типам сквиттеров
+        elif mode == 'reg05_msg_intervals':
             data_to_plot = []
-            
-            # проверка каждого типа данных по отдельности
-            if icao in self.alt_dict and len(self.alt_dict[icao]) > 1:
-                timestamps = np.unique([t for t, _ in self.alt_dict[icao]])
+            if icao in self.icao_airborne_pos_ts and len(self.icao_airborne_pos_ts[icao]) > 1:
+                timestamps = np.array(sorted(self.icao_airborne_pos_ts[icao]))
                 intervals = np.diff(timestamps) * 1000
                 intervals = intervals[intervals >= 0]
                 if len(intervals) > 0:
-                    data_to_plot.append((intervals, "Высота", 'blue'))
+                    data_to_plot.append((intervals, f"Местоположение в воздухе", 'blue'))
 
             if not data_to_plot:
-                self.ax.text(0.5, 0.5, f"Нет данных для {icao}", ha='center', va='center')
+                self.ax.text(0.5, 0.5, f"Нет данных о местоположении в воздухе для {icao}", ha='center', va='center')
                 self.has_plot_data = False
                 
             else:
+                center = 500 # типичный период, мс
+                dev = 100    # разброс, мс
+                num_bins = 8 # количество бинов внутри диапазона
+                
+                low = center - dev
+                high = center + dev
+
+                intervals_in_range = intervals[(intervals >= low) & (intervals <= high)]
+                count_in_range = len(intervals_in_range)
+
+                
+                if count_in_range == 0:
+                    self.ax.clear()
+                    self.ax.text(0.5, 0.5, 
+                                f"Нет данных в диапазоне {low}-{high} мс для {icao}\n",
+                                ha='center', va='center')
+                    self.has_plot_data = False
+                    self.fig.canvas.draw_idle()
+                    return
+
+                # гистограмма
+                for intervals, label, color in data_to_plot:
+                    bin_edges = np.linspace(low, high, num_bins + 1)
+                    self.ax.hist(
+                        intervals,
+                        bins=bin_edges,
+                        alpha=0.6,
+                        color=color,
+                        edgecolor='black',
+                        label=f"{label} ({count_in_range} интервалов)"
+                    )
+                
+                callsign = self.icao_callsigns.get(icao, "N/A")
+                display_id = f"{callsign} ({icao})" if callsign != "N/A" else icao
+                
+                self.ax.set_xlabel('Интервал между сообщениями (мс)')
+                self.ax.set_ylabel('Количество')
+                self.ax.set_title(f'Распределение интервалов сообщений сквиттера местоположения в воздухе {display_id} (REG05)')
+
+                self.ax.legend()
+                self.ax.grid(True, linestyle='--', alpha=0.7)
+                self.has_plot_data = True
+                self.fig.canvas.draw_idle()
+
+        elif mode == 'reg06_msg_intervals':
+            data_to_plot = []
+            
+            if icao in self.icao_surface_pos_ts and len(self.icao_surface_pos_ts[icao]) > 1:
+                timestamps = np.array(sorted(self.icao_surface_pos_ts[icao]))
+                intervals = np.diff(timestamps) * 1000
+                intervals = intervals[intervals >= 0]
+                if len(intervals) > 0:
+                    data_to_plot.append((intervals, f"Местоположение на земле", 'red'))
+
+            if not data_to_plot:
+                self.ax.text(0.5, 0.5, f"Нет данных о местоположении на земле для {icao}", ha='center', va='center')
+                self.has_plot_data = False
+                
+            else:
+                center = 500
+                dev = 100
+                num_bins = 8
+                
+                low = center - dev
+                high = center + dev
+
+                intervals_in_range = intervals[(intervals >= low) & (intervals <= high)]
+                count_in_range = len(intervals_in_range)
+
+                if count_in_range == 0:
+                    self.ax.clear()
+                    self.ax.text(0.5, 0.5, 
+                                f"Нет данных в диапазоне {low}-{high} мс для {icao}\n",
+                                ha='center', va='center')
+                    self.has_plot_data = False
+                    self.fig.canvas.draw_idle()
+                    return
+
+
+                for intervals, label, color in data_to_plot:
+                    bin_edges = np.linspace(low, high, num_bins + 1)
+                    self.ax.hist(
+                        intervals,
+                        bins=bin_edges,
+                        alpha=0.6,
+                        color=color,
+                        edgecolor='black',
+                        label=f"{label} ({count_in_range} интервалов)"
+                    )
+                
+                callsign = self.icao_callsigns.get(icao, "N/A")
+                display_id = f"{callsign} ({icao})" if callsign != "N/A" else icao
+                
+                self.ax.set_xlabel('Интервал между сообщениями (мс)')
+                self.ax.set_ylabel('Количество')
+                self.ax.set_title(f'Распределение интервалов сообщений сквиттера местоположения на земле {display_id} (REG06)')
+
+                self.ax.legend()
+                self.ax.grid(True, linestyle='--', alpha=0.7)
+                self.has_plot_data = True
+                self.fig.canvas.draw_idle()
+
+        elif mode == 'reg08_msg_intervals':
+            data_to_plot = []
+            
+            if icao in self.icao_identification and len(self.icao_identification[icao]) > 1:
+                timestamps = np.array(sorted(self.icao_identification[icao]))
+                intervals = np.diff(timestamps) * 1000
+                intervals = intervals[intervals >= 0]
+                if len(intervals) > 0:
+                    data_to_plot.append((intervals, f"Опознавательный код и категория", 'cyan'))
+
+            if not data_to_plot:
+                self.ax.text(0.5, 0.5, f"Нет данных об опознавательном коде и категории для {icao}", ha='center', va='center')
+                self.has_plot_data = False
+                
+            else:
+                center = 5000
+                dev = 100
+                num_bins = 8
+                
+                low = center - dev
+                high = center + dev
+
+                intervals_in_range = intervals[(intervals >= low) & (intervals <= high)]
+                count_in_range = len(intervals_in_range)
+
+                if count_in_range == 0:
+                    self.ax.clear()
+                    self.ax.text(0.5, 0.5, 
+                                f"Нет данных в диапазоне {low}-{high} мс для {icao}\n",
+                                ha='center', va='center')
+                    self.has_plot_data = False
+                    self.fig.canvas.draw_idle()
+                    return
+
                 # параметры для гистограммы
-                center = 500  # типичный период, мс
-                dev = 100     # разброс, мс
-                num_bins = 8  # количество интервалов внутри диапазона
-
-                # гистрограмма с обрезкой крайних значений
                 for intervals, label, color in data_to_plot:
-                    # обрезка интервалов в диапазоне center +/- dev
-                    clipped_intervals = np.clip(intervals, center - dev, center + dev)
-                    # границы интервалов равномерно внутри диапазона
-                    bin_edges = np.linspace(center - dev, center + dev, num_bins + 1)
-                    self.ax.hist(clipped_intervals, bins=bin_edges, alpha=0.6, 
-                                label=f"{label} ({len(intervals)} раз)", 
-                                color=color, edgecolor='black', density=False)
+                    bin_edges = np.linspace(low, high, num_bins + 1)
                     
+                    self.ax.hist(
+                        intervals,
+                        bins=bin_edges,
+                        alpha=0.6,
+                        color=color,
+                        edgecolor='black',
+                        label=f"{label} ({count_in_range} интервалов)"
+                    )
+                
                 callsign = self.icao_callsigns.get(icao, "N/A")
                 display_id = f"{callsign} ({icao})" if callsign != "N/A" else icao
                 
                 self.ax.set_xlabel('Интервал между сообщениями (мс)')
-                self.ax.set_ylabel('Частота встречаемости сообщения')
-                self.ax.set_title(f'Распределение интервалов: {display_id}')
+                self.ax.set_ylabel('Количество')
+                self.ax.set_title(f'Распределение интервалов сообщений сквиттера опознавательного кода и категории {display_id} (REG08)')
+
                 self.ax.legend()
+                self.ax.grid(True, linestyle='--', alpha=0.7)
                 self.has_plot_data = True
-
                 self.fig.canvas.draw_idle()
-
-        elif mode == 'spd_msg_intervals':
+  
+        elif mode == 'reg09_msg_intervals':
             data_to_plot = []
             
-            if icao in self.spd_dict and len(self.spd_dict[icao]) > 1:
-                timestamps = np.unique([t for t, _ in self.spd_dict[icao]])
+            if icao in self.icao_airborne_speed_ts and len(self.icao_airborne_speed_ts[icao]) > 1:
+                timestamps = np.array(sorted(self.icao_airborne_speed_ts[icao]))
                 intervals = np.diff(timestamps) * 1000
                 intervals = intervals[intervals >= 0]
                 if len(intervals) > 0:
-                    data_to_plot.append((intervals, f"Скорость", 'green'))
+                    data_to_plot.append((intervals, f"Скорость при нахождении в воздухе", 'limegreen'))
 
             if not data_to_plot:
-                self.ax.text(0.5, 0.5, f"Нет данных для {icao}", ha='center', va='center')
+                self.ax.text(0.5, 0.5, f"Нет данных о скорости при нахождении в воздухе для {icao}", ha='center', va='center')
                 self.has_plot_data = False
                 
             else:
-                center = 500  # типичный период, мс
-                dev = 100     # разброс, мс
-                num_bins = 8 # количество бинов внутри диапазона
+                center = 500
+                dev = 100
+                num_bins = 8
+
+                low = center - dev
+                high = center + dev
+
+                intervals_in_range = intervals[(intervals >= low) & (intervals <= high)]
+                count_in_range = len(intervals_in_range)
+
+                if count_in_range == 0:
+                    self.ax.clear()
+                    self.ax.text(0.5, 0.5, 
+                                f"Нет данных в диапазоне {low}-{high} мс для {icao}\n",
+                                ha='center', va='center')
+                    self.has_plot_data = False
+                    self.fig.canvas.draw_idle()
+                    return
 
                 for intervals, label, color in data_to_plot:
-                    clipped_intervals = np.clip(intervals, center - dev, center + dev)
-                    bin_edges = np.linspace(center - dev, center + dev, num_bins + 1)
-
-                    self.ax.hist(clipped_intervals, bins=bin_edges, alpha=0.6, 
-                                label=f"{label} ({len(intervals)} раз)", 
+                    bin_edges = np.linspace(low, high, num_bins + 1)
+                    self.ax.hist(intervals, bins=bin_edges, alpha=0.6, 
+                                label=f"{label} ({count_in_range} интервалов)", 
                                 color=color, edgecolor='black', density=False)
                     
                 # настройки графика
@@ -518,169 +698,184 @@ class IcaoGraphs:
                 display_id = f"{callsign} ({icao})" if callsign != "N/A" else icao
                 self.ax.set_xlabel('Интервал между сообщениями (мс)')
                 self.ax.set_ylabel('Частота встречаемости сообщения')
-                self.ax.set_title(f'Распределение интервалов: {display_id}')
+                self.ax.set_title(f'Распределение интервалов сообщений сквиттера скорости при нахождении в воздухе: {display_id} (REG09)')
                 self.ax.legend()
+                self.ax.grid(True, linestyle='--', alpha=0.7)
                 self.has_plot_data = True
                 self.fig.canvas.draw_idle()
 
-        elif mode == 'course_msg_intervals':
-            # данные для гистограмм
+        elif mode == 'reg61_msg_intervals':
             data_to_plot = []
-            if icao in self.course_dict and len(self.course_dict[icao]) > 1:
-                timestamps = np.unique([t for t, _ in self.course_dict[icao]])
+            
+            if icao in self.icao_status and len(self.icao_status[icao]) > 1:
+                timestamps = np.array(sorted(self.icao_status[icao]))
                 intervals = np.diff(timestamps) * 1000
                 intervals = intervals[intervals >= 0]
                 if len(intervals) > 0:
-                    data_to_plot.append((intervals, "Курс", 'purple'))
+                    data_to_plot.append((intervals, f"Статус воздушного судна", 'darkviolet'))
 
             if not data_to_plot:
-                self.ax.text(0.5, 0.5, f"Нет данных для {icao}", ha='center', va='center')
+                self.ax.text(0.5, 0.5, f"Нет данных о статусе воздушного судна для {icao}", ha='center', va='center')
                 self.has_plot_data = False
                 
             else:
-                center = 500  # типичный период, мс
-                dev = 100     # разброс, мс
-                num_bins = 8 # количество бинов внутри диапазона
+                center = 5000
+                dev = 100
+                num_bins = 8
+                
+                low = center - dev
+                high = center + dev
 
-                # гистрограммы
+                intervals_in_range = intervals[(intervals >= low) & (intervals <= high)]
+                count_in_range = len(intervals_in_range)
+
+                if count_in_range == 0:
+                    self.ax.clear()
+                    self.ax.text(0.5, 0.5, 
+                                f"Нет данных в диапазоне {low}-{high} мс для {icao}\n",
+                                ha='center', va='center')
+                    self.has_plot_data = False
+                    self.fig.canvas.draw_idle()
+                    return
+
                 for intervals, label, color in data_to_plot:
-                    clipped_intervals = np.clip(intervals, center - dev, center + dev)
-                    bin_edges = np.linspace(center - dev, center + dev, num_bins + 1)
-                    self.ax.hist(clipped_intervals, bins=bin_edges, alpha=0.6, 
-                                label=f"{label} ({len(intervals)} раз)", 
-                                color=color, edgecolor='black', density=False)
+                    bin_edges = np.linspace(low, high, num_bins + 1)
                     
-                # настройки графика
+                    self.ax.hist(
+                        intervals,
+                        bins=bin_edges,
+                        alpha=0.6,
+                        color=color,
+                        edgecolor='black',
+                        label=f"{label} ({count_in_range} интервалов)"
+                    )
+                
                 callsign = self.icao_callsigns.get(icao, "N/A")
                 display_id = f"{callsign} ({icao})" if callsign != "N/A" else icao
+                
                 self.ax.set_xlabel('Интервал между сообщениями (мс)')
-                self.ax.set_ylabel('Частота встречаемости сообщения')
-                self.ax.set_title(f'Распределение интервалов: {display_id}')
-                self.ax.legend()
-                self.has_plot_data = True
+                self.ax.set_ylabel('Количество')
+                self.ax.set_title(f'Распределение интервалов сообщений сквиттера статуса {display_id} (REG61)')
 
+                self.ax.legend()
+                self.ax.grid(True, linestyle='--', alpha=0.7)
+                self.has_plot_data = True
                 self.fig.canvas.draw_idle()
 
-        elif mode == 'sel_alt_msg_intervals':
-            # данные для гистограмм
+        elif mode == 'reg62_msg_intervals':
             data_to_plot = []
-
-            if icao in self.sel_alt_dict and len(self.sel_alt_dict[icao]) > 1:
-                timestamps = np.unique([t for t, _ in self.sel_alt_dict[icao]])
+            
+            if icao in self.icao_target_state and len(self.icao_target_state[icao]) > 1:
+                timestamps = np.array(sorted(self.icao_target_state[icao]))
                 intervals = np.diff(timestamps) * 1000
                 intervals = intervals[intervals >= 0]
                 if len(intervals) > 0:
-                    data_to_plot.append((intervals, "Выбр. высота", 'red'))
+                    data_to_plot.append((intervals, f"Состояние и статус цели", 'orange'))
 
             if not data_to_plot:
-                self.ax.text(0.5, 0.5, f"Нет данных для {icao}", ha='center', va='center')
+                self.ax.text(0.5, 0.5, f"Нет данных о состоянии и статусе цели для {icao}", ha='center', va='center')
                 self.has_plot_data = False
                 
             else:
-                center = 500  # типичный период, мс
-                dev = 100     # разброс, мс
-                num_bins = 8 # количество бинов внутри диапазона
+                center = 1250
+                dev = 100
+                num_bins = 8
+                
+                low = center - dev
+                high = center + dev
 
-                # гистрограммы
+                intervals_in_range = intervals[(intervals >= low) & (intervals <= high)]
+                count_in_range = len(intervals_in_range)
+
+                if count_in_range == 0:
+                    self.ax.clear()
+                    self.ax.text(0.5, 0.5, 
+                                f"Нет данных в диапазоне {low}-{high} мс для {icao}\n",
+                                ha='center', va='center')
+                    self.has_plot_data = False
+                    self.fig.canvas.draw_idle()
+                    return
+
                 for intervals, label, color in data_to_plot:
-                    clipped_intervals = np.clip(intervals, center - dev, center + dev)
-                    bin_edges = np.linspace(center - dev, center + dev, num_bins + 1)
-                    self.ax.hist(clipped_intervals, bins=bin_edges, alpha=0.6, 
-                                label=f"{label} ({len(intervals)} раз)", 
-                                color=color, edgecolor='black', density=False)
+                    bin_edges = np.linspace(low, high, num_bins + 1)
                     
-                # настройки графика
+                    self.ax.hist(
+                        intervals,
+                        bins=bin_edges,
+                        alpha=0.6,
+                        color=color,
+                        edgecolor='black',
+                        label=f"{label} ({count_in_range} интервалов)"
+                    )
+                
                 callsign = self.icao_callsigns.get(icao, "N/A")
                 display_id = f"{callsign} ({icao})" if callsign != "N/A" else icao
-                self.ax.set_xlabel('Интервал между сообщениями (мс)')
-                self.ax.set_ylabel('Частота встречаемости сообщения')
-                self.ax.set_title(f'Распределение интервалов: {display_id}')
-                self.ax.legend()
                 
-                self.has_plot_data = True
+                self.ax.set_xlabel('Интервал между сообщениями (мс)')
+                self.ax.set_ylabel('Количество')
+                self.ax.set_title(f'Распределение интервалов сообщений сквиттера состояния и статуса цели {display_id} (REG62)')
 
+                self.ax.legend()
+                self.ax.grid(True, linestyle='--', alpha=0.7)
+                self.has_plot_data = True
                 self.fig.canvas.draw_idle()
 
-        elif mode == 'alt_diff_msg_intervals':
-            # данные для гистограмм
+        elif mode == 'reg65_msg_intervals':
             data_to_plot = []
-
-            if icao in self.alt_diff_dict and len(self.alt_diff_dict[icao]) > 1:
-                timestamps = np.unique([t for t, _ in self.alt_diff_dict[icao]])
+            
+            if icao in self.icao_operation_status and len(self.icao_operation_status[icao]) > 1:
+                timestamps = np.array(sorted(self.icao_operation_status[icao]))
                 intervals = np.diff(timestamps) * 1000
                 intervals = intervals[intervals >= 0]
                 if len(intervals) > 0:
-                    data_to_plot.append((intervals, "Разн. высот", 'orange'))
+                    data_to_plot.append((intervals, f"Эксплуатационный статус", 'mediumaquamarine'))
 
             if not data_to_plot:
-                self.ax.text(0.5, 0.5, f"Нет данных для {icao}", ha='center', va='center')
+                self.ax.text(0.5, 0.5, f"Нет данных об эксплуатационном статусе для {icao}", ha='center', va='center')
                 self.has_plot_data = False
                 
             else:
-                center = 500  # типичный период, мс
-                dev = 100     # разброс, мс
-                num_bins = 8 # количество бинов внутри диапазона
-
-                # гистрограммы
-                for intervals, label, color in data_to_plot:
-                    clipped_intervals = np.clip(intervals, center - dev, center + dev)
-                    bin_edges = np.linspace(center - dev, center + dev, num_bins + 1)
-                    self.ax.hist(clipped_intervals, bins=bin_edges, alpha=0.6, 
-                                label=f"{label} ({len(intervals)} раз)", 
-                                color=color, edgecolor='black', density=False)
-                    
-                # настройки графика
-                callsign = self.icao_callsigns.get(icao, "N/A")
-                display_id = f"{callsign} ({icao})" if callsign != "N/A" else icao
-                self.ax.set_xlabel('Интервал между сообщениями (мс)')
-                self.ax.set_ylabel('Частота встречаемости сообщения')
-                self.ax.set_title(f'Распределение интервалов: {display_id}')
-                self.ax.legend()
-
-                self.has_plot_data = True
-
-                self.fig.canvas.draw_idle()
-
-        elif mode == 'baro_corr_msg_intervals':
-            # данные для гистограммы
-            data_to_plot = []
-
-            if icao in self.baro_correction_dict and len(self.baro_correction_dict[icao]) > 1:
-                timestamps = np.unique([t for t, _ in self.baro_correction_dict[icao]])
-                intervals = np.diff(timestamps) * 1000
-                intervals = intervals[intervals >= 0]
-                if len(intervals) > 0:
-                    data_to_plot.append((intervals, "Барокорр.", 'brown'))
-
-            if not data_to_plot:
-                self.ax.text(0.5, 0.5, f"Нет данных для {icao}", ha='center', va='center')
-                self.has_plot_data = False
+                center = 2500
+                dev = 100
+                num_bins = 8
                 
-            else:
-                center = 500  # типичный период, мс
-                dev = 100     # разброс, мс
-                num_bins = 8 # количество бинов внутри диапазона
+                low = center - dev
+                high = center + dev
 
-                # гистрограммы
+                intervals_in_range = intervals[(intervals >= low) & (intervals <= high)]
+                count_in_range = len(intervals_in_range)
+
+                if count_in_range == 0:
+                    self.ax.clear()
+                    self.ax.text(0.5, 0.5, 
+                                f"Нет данных в диапазоне {low}-{high} мс для {icao}\n",
+                                ha='center', va='center')
+                    self.has_plot_data = False
+                    self.fig.canvas.draw_idle()
+                    return
+
                 for intervals, label, color in data_to_plot:
-                    clipped_intervals = np.clip(intervals, center - dev, center + dev)
-                    bin_edges = np.linspace(center - dev, center + dev, num_bins + 1)
-                    self.ax.hist(clipped_intervals, bins=bin_edges, alpha=0.6, 
-                                label=f"{label} ({len(intervals)} раз)", 
-                                color=color, edgecolor='black', density=False)
-                    
-                # настройки графика
+                    bin_edges = np.linspace(low, high, num_bins + 1)
+                    self.ax.hist(
+                        intervals,
+                        bins=bin_edges,
+                        alpha=0.6,
+                        color=color,
+                        edgecolor='black',
+                        label=f"{label} ({count_in_range} интервалов)"
+                    )
+                
                 callsign = self.icao_callsigns.get(icao, "N/A")
                 display_id = f"{callsign} ({icao})" if callsign != "N/A" else icao
+                
                 self.ax.set_xlabel('Интервал между сообщениями (мс)')
-                self.ax.set_ylabel('Частота встречаемости сообщения')
-                self.ax.set_title(f'Распределение интервалов: {display_id}')
+                self.ax.set_ylabel('Количество')
+                self.ax.set_title(f'Распределение интервалов сообщений сквиттера эксплуатационного статуса {display_id} (REG65)')
+
                 self.ax.legend()
-
+                self.ax.grid(True, linestyle='--', alpha=0.7)
                 self.has_plot_data = True
-
                 self.fig.canvas.draw_idle()
-
 
         # специльная настройка для гистограммы
         if mode.endswith('_msg_intervals'):
@@ -826,6 +1021,14 @@ if __name__ == '__main__':
     icao_courses = {}
     cpr_messages = {}
 
+    icao_airborne_pos_ts = {}
+    icao_surface_pos_ts = {}
+    icao_ident_timestamps = {}
+    icao_speed_ts = {}
+    icao_status_ts = {}
+    icao_target_state_ts = {}
+    icao_operation_status_ts = {}
+
     try:
         # основной цикл чтения файла
         with open(file_path, "r") as f:
@@ -859,11 +1062,35 @@ if __name__ == '__main__':
                 try:
                     # узнаём тип сообщения и вызываем нужные функции для извлечения данных
                     tc = pms.adsb.typecode(message_str)
+
+                    if tc == 0:
+                        # Воздушное положение без данных
+                        pass
+
+                    # временные метки для гистограмм
+                    if (9 <= tc <= 18) or (20 <= tc <= 22):
+                        icao_airborne_pos_ts.setdefault(aa, []).append(timestamp)
+
+                    if 5 <= tc <= 8:
+                        icao_surface_pos_ts.setdefault(aa, []).append(timestamp)
+                    
+                    if tc == 19:
+                        icao_speed_ts.setdefault(aa, []).append(timestamp)
+
+                    if tc == 28:
+                        icao_status_ts.setdefault(aa, []).append(timestamp)
+
+                    if tc == 29:
+                        icao_target_state_ts.setdefault(aa, []).append(timestamp)
+
+                    if tc == 31:
+                        icao_operation_status_ts.setdefault(aa, []).append(timestamp)
+
                     # сообщения с высотой и координатами (tc 9-18)
                     if 9 <= tc <= 18:
                         alt = get_altitude(message_str)
                         if alt is not None and -1000 <= alt <= 50000:
-                            icao_altitude.setdefault(aa, []).append((timestamp, alt))
+                            icao_altitude.setdefault(aa, []).append((timestamp, alt, 'baro'))
                         
                         # логика декодирования координат из двух cpr сообщений
                         cpr_messages.setdefault(aa, [None, None])
@@ -879,6 +1106,12 @@ if __name__ == '__main__':
                                     icao_positions.setdefault(aa, []).append((timestamp, pos[0], pos[1]))
                                 # сбрасываем сообщения для следующей пары
                                 cpr_messages[aa] = [None, None]
+
+                    # сообщения с GNSS высотой
+                    elif 20 <= tc <= 22:
+                        alt = get_altitude(message_str)
+                        if alt is not None and -1000 <= alt <= 50000:
+                            icao_altitude.setdefault(aa, []).append((timestamp, alt, 'gnss'))
                     
                     # сообщения со скоростью и курсом (tc 19)
                     elif tc == 19:
@@ -897,8 +1130,10 @@ if __name__ == '__main__':
 
                     # сообщения с позывным (tc 1-4)
                     elif 1 <= tc <= 4:
+                        icao_ident_timestamps.setdefault(aa, []).append(timestamp)
                         cs = get_callsign(message_str)
-                        if cs: icao_callsigns[aa] = cs
+                        if cs: 
+                            icao_callsigns[aa] = cs
 
                     # сообщения с параметрами автопилота (tc 29)
                     elif tc == 29:
@@ -944,7 +1179,10 @@ if __name__ == '__main__':
         print(f"\nВсего бортов: {len(adsb_icao_list)}\n")
 
         # запуск графического интерфейса с передачей всех собранных данных
-        IcaoGraphs(icao_altitude, icao_speed, icao_positions, icao_courses, adsb_icao_list, icao_callsigns, icao_selected_altitude, icao_altitude_difference, icao_baro_correction)
+        IcaoGraphs(icao_altitude, icao_speed, icao_positions, icao_courses, adsb_icao_list, 
+                   icao_callsigns, icao_selected_altitude, icao_altitude_difference, 
+                   icao_baro_correction, icao_airborne_pos_ts, icao_surface_pos_ts, icao_ident_timestamps,
+                   icao_speed_ts, icao_status_ts, icao_target_state_ts, icao_operation_status_ts)
 
     except FileNotFoundError:
         print(f"Файл {file_path} не найден")
