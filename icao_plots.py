@@ -7,10 +7,10 @@ from dict_data import *
 
 class IcaoPlots:
     def __init__(self, alt_dict, spd_dict, pos_dict, course_dict, adsb_icao_list, icao_callsigns, 
-                 icao_sel_alt, icao_alt_diff, icao_baro_correction, 
-                 icao_airborne_pos_ts, icao_surface_pos_ts, icao_ident_ts,
-                 icao_speed_ts, icao_status, icao_emg_ts, icao_mode_change, icao_tcas_ra, icao_target_state, 
-                 icao_air_op_status, icao_surf_op_status, icao_acq_ts, icao_track_angles, icao_gs_spd_ts, icao_airspd_ts):
+                 icao_sel_alt, icao_alt_diff, icao_baro_correction, icao_airborne_pos_ts, 
+                 icao_surface_pos_ts, icao_ident_ts, icao_speed_ts, icao_status, icao_emg_ts, 
+                 icao_mode_change, icao_tcas_ra, icao_target_state, icao_air_op_status, 
+                 icao_surf_op_status, icao_acq_ts, icao_track_angles, icao_gs_spd_ts, icao_airspd_ts):
         
         self.icao_list = sorted(list(adsb_icao_list))
         self.has_plot_data = False
@@ -21,40 +21,40 @@ class IcaoPlots:
         self.pos_dict = pos_dict
         self.course_dict = course_dict
         self.icao_callsigns = icao_callsigns
-        self.sel_alt_dict = icao_sel_alt if icao_sel_alt else {}
-        self.alt_diff_dict = icao_alt_diff if icao_alt_diff else {}
-        self.baro_correction_dict = icao_baro_correction if icao_baro_correction else {} 
-        self.track_angle_dict = icao_track_angles if icao_track_angles else {}
-        self.icao_gs_spd_ts_dict = icao_gs_spd_ts if icao_gs_spd_ts else {}
-        self.icao_airspd_ts_dict = icao_airspd_ts if icao_airspd_ts else {}
+        self.sel_alt_dict = icao_sel_alt or {}
+        self.alt_diff_dict = icao_alt_diff or {}
+        self.baro_correction_dict = icao_baro_correction or {} 
+        self.track_angle_dict = icao_track_angles or {}
+        self.icao_gs_spd_ts_dict = icao_gs_spd_ts or {}
+        self.icao_airspd_ts_dict = icao_airspd_ts or {}
 
         # reg 05
-        self.icao_airborne_pos_ts = icao_airborne_pos_ts if icao_airborne_pos_ts else {}
+        self.icao_airborne_pos_ts = icao_airborne_pos_ts or {}
         
         # reg 06
-        self.icao_surface_pos_ts = icao_surface_pos_ts if icao_surface_pos_ts else {}
+        self.icao_surface_pos_ts = icao_surface_pos_ts or {}
                 
         # reg 08
-        self.icao_ident_ts = icao_ident_ts if icao_ident_ts else {}
+        self.icao_ident_ts = icao_ident_ts or {}
 
         # reg 09
-        self.icao_speed_ts = icao_speed_ts if icao_speed_ts else {}
+        self.icao_speed_ts = icao_speed_ts or {}
 
         # reg 61
-        self.icao_status = icao_status if icao_status else {}
-        self.icao_emg_ts = icao_emg_ts if icao_emg_ts else {}
-        self.icao_mode_change = icao_mode_change if icao_mode_change else {}
-        self.icao_tcas_ra = icao_tcas_ra if icao_tcas_ra else {}
+        self.icao_status = icao_status or {}
+        self.icao_emg_ts = icao_emg_ts or {}
+        self.icao_mode_change = icao_mode_change or {}
+        self.icao_tcas_ra = icao_tcas_ra or {}
 
         # reg 62
-        self.icao_target_state = icao_target_state if icao_target_state else {}
+        self.icao_target_state = icao_target_state or {}
         
         # reg 65
-        self.icao_air_op_status = icao_air_op_status if icao_air_op_status else {}
-        self.icao_surf_op_status = icao_surf_op_status if icao_surf_op_status else {}
+        self.icao_air_op_status = icao_air_op_status or {}
+        self.icao_surf_op_status = icao_surf_op_status or {}
 
         # df 11
-        self.icao_df11_ts = icao_acq_ts if icao_acq_ts else {}
+        self.icao_df11_ts = icao_acq_ts or {}
 
         self.icao_index = 0
         
@@ -63,17 +63,17 @@ class IcaoPlots:
                            'latitude', 'course', 'track', 'altitude_diff', 'baro_correction',
                            'reg09_tracks', 'track_angle', 'airspd_angle']
         
-        self.hist_modes = ['reg05_hist', 'reg06_1_hist', 'reg06_2_hist', 
-                           'reg08_hist', 'reg09_hist', 'reg61_1_hist', 'reg61_2_hist', 'reg61_3_hist', 
-                           'reg61_4_hist', 'reg62_hist', 
-                           'reg65_1_hist', 'reg65_2_hist', 'df11_hist']
+        self.hist_modes = ['reg05_hist', 'reg06_1_hist', 'reg06_2_hist', 'reg08_hist', 
+                           'reg09_hist', 'reg61_1_hist', 'reg61_2_hist', 'reg61_3_hist', 
+                           'reg61_4_hist', 'reg62_hist', 'reg65_1_hist', 
+                           'reg65_2_hist', 'df11_hist']
 
         self.current_mode_group = 'graphs'
         self.plot_modes = self.graph_modes
         self.plot_mode_idx = 0
         self.ylims = {mode: {} for mode in self.graph_modes}
 
-        # пределы осей y по умолчанию для адекватного отображения графиков при первом открытии
+        # пределы осей y по умолчанию при первом открытии
         self.default_ylims = {
             'altitude': (-1200, 40000), 
             'speed': (0, 500), 
@@ -88,7 +88,8 @@ class IcaoPlots:
         # окно и основная области для рисования (осей)
         self.fig, self.ax = plt.subplots(figsize=(13, 7))
         self.fig.canvas.manager.set_window_title('Графики бортов')
-        plt.subplots_adjust(left=0.25, bottom=0.25) # пространство для кнопок
+        # пространство для кнопок
+        plt.subplots_adjust(left=0.25, bottom=0.25) 
         
         # атрибут для хранения ссылки на правую ось y
         self.ax2 = None
@@ -126,7 +127,11 @@ class IcaoPlots:
         plt.show()
 
         if not self.icao_list:
-            self.ax.text(0.5, 0.5, f"Нет данных для построения графиков", ha='center', va='center')
+            self.ax.text(
+                0.5, 0.5, 
+                f"Нет данных для построения графиков", 
+                ha='center', va='center'
+            )
             self.has_plot_data = False
 
     # отрисовка текущего графика, вызывается при любом изменении
@@ -143,7 +148,11 @@ class IcaoPlots:
 
         # если нет данных
         if not self.icao_list:
-            self.ax.text(0.5, 0.5, "Нет бортов с данными для отображения", ha='center', va='center')
+            self.ax.text(
+                0.5, 0.5, 
+                "Нет бортов с данными для отображения", 
+                ha='center', va='center'
+            )
             self.fig.canvas.draw_idle()
             return
         
@@ -155,8 +164,16 @@ class IcaoPlots:
         callsign = self.icao_callsigns.get(icao, "N/A")
         modes_key = f"{icao}_modes"
         active_modes = self.icao_callsigns.get(modes_key, set())
-        mode_str = f" ({', '.join(sorted(active_modes))})" if active_modes else ""
-        display_id = f"{callsign} ({icao}){mode_str}" if callsign != "N/A" else f"{icao}{mode_str}"
+
+        if active_modes:
+            mode_str = f" ({', '.join(sorted(active_modes))})"
+        else:
+            mode_str = ""
+
+        if callsign != "N/A":
+            display_id = f"{callsign} ({icao}){mode_str}"
+        else:
+            display_id = f"{icao}{mode_str}"
         
         # переменные для подписей
         data = None
@@ -277,7 +294,11 @@ class IcaoPlots:
             data = self.course_dict.get(icao, [])
             title, label = f"Курс: {display_id}", "Курс (°)"
             if not data:
-                self.ax.text(0.5, 0.5, f"Нет данных о курсе для борта {icao}", ha='center', va='center')
+                self.ax.text(
+                    0.5, 0.5, 
+                    f"Нет данных о курсе для борта {icao}", 
+                    ha='center', va='center'
+                )
                 self.has_plot_data = False
             else:
                 times = [timestamp_to_utc(t) for t, v in sorted(data)]
@@ -443,7 +464,6 @@ class IcaoPlots:
                 track_line_lats = []
 
                 for t, angle in sorted(spd_data):
-
                     nearest = None
                     min_diff = None
 
@@ -507,7 +527,10 @@ class IcaoPlots:
                 color = 'blue'
                 bar_color = 'mediumblue'
                 center, dev, num_bins = 500, 100, 15
-                title_text = f'Распределение интервалов сообщений сквиттера местоположения в воздухе {display_id} (REG05)'
+                title_text = (
+                    f'Распределение интервалов сообщений сквиттера '
+                    f'местоположения в воздухе {display_id} (REG05)'
+                )
 
             elif mode == 'reg06_1_hist':
                 data_source = self.icao_surface_pos_ts
@@ -515,7 +538,10 @@ class IcaoPlots:
                 color = 'red'
                 bar_color = 'firebrick'
                 center, dev, num_bins = 500, 100, 15
-                title_text = f'Распределение интервалов сообщений сквиттера местоположения на земле при высокой частоте {display_id} (REG06)'
+                title_text = (
+                    f'Распределение интервалов сообщений сквиттера '
+                    f'местоположения на земле при высокой частоте {display_id} (REG06)'
+                )
             
             elif mode == 'reg06_2_hist':
                 data_source = self.icao_surface_pos_ts
@@ -523,7 +549,10 @@ class IcaoPlots:
                 color = 'red'
                 bar_color = 'firebrick'
                 center, dev, num_bins = 5000, 200, 15
-                title_text = f'Распределение интервалов сообщений сквиттера местоположения на земле при низкой частоте {display_id} (REG06)'
+                title_text = (
+                    f'Распределение интервалов сообщений сквиттера '
+                    f'местоположения на земле при низкой частоте {display_id} (REG06)'
+                )
 
             elif mode == 'reg08_hist':
                 data_source = self.icao_ident_ts
@@ -531,7 +560,10 @@ class IcaoPlots:
                 color = 'cyan'
                 bar_color = 'skyblue'
                 center, dev, num_bins = 5000, 200, 15
-                title_text = f'Распределение интервалов сообщений сквиттера опознавательного кода и категории {display_id} (REG08)'
+                title_text = (
+                    f'Распределение интервалов сообщений сквиттера '
+                    f'опознавательного кода и категории {display_id} (REG08)'
+                )
             
             elif mode == 'reg09_hist':
                 data_source = self.icao_speed_ts
@@ -539,7 +571,10 @@ class IcaoPlots:
                 color = 'lime'
                 bar_color = 'mediumseagreen'
                 center, dev, num_bins = 500, 100, 15
-                title_text = f'Распределение интервалов сообщений сквиттера путевой скорости при нахождении в воздухе: {display_id} (REG09)'
+                title_text = (
+                    f'Распределение интервалов сообщений сквиттера '
+                    f'путевой скорости при нахождении в воздухе: {display_id} (REG09)'
+                )
 
             elif mode == 'reg61_1_hist':
                 data_source = self.icao_status
@@ -547,7 +582,10 @@ class IcaoPlots:
                 color = 'darkviolet'
                 bar_color = 'indigo'
                 center, dev, num_bins = 5000, 200, 15
-                title_text = f'Распределение интервалов сообщений сквиттера статуса {display_id} (REG61)'
+                title_text = (
+                    f'Распределение интервалов сообщений сквиттера '
+                    f'статуса {display_id} (REG61)'
+                )
 
             elif mode == 'reg61_2_hist':
                 data_source = self.icao_emg_ts
@@ -555,7 +593,10 @@ class IcaoPlots:
                 color = 'darkviolet'
                 bar_color = 'indigo'
                 center, dev, num_bins = 800, 100, 15
-                title_text = f'Распределение интервалов сообщений сквиттера сигнала бедствия {display_id} (REG61)'
+                title_text = (
+                    f'Распределение интервалов сообщений сквиттера '
+                    f'сигнала бедствия {display_id} (REG61)'
+                )
 
             elif mode == 'reg61_3_hist':
                 data_source = self.icao_mode_change
@@ -563,7 +604,10 @@ class IcaoPlots:
                 color = 'darkviolet'
                 bar_color = 'indigo'
                 center, dev, num_bins = 800, 100, 15
-                title_text = f'Распределение интервалов сообщений сквиттера статуса передающей системы {display_id} (REG61)'
+                title_text = (
+                    f'Распределение интервалов сообщений сквиттера '
+                    f'статуса передающей системы {display_id} (REG61)'
+                )
             
             elif mode == 'reg61_4_hist':
                 data_source = self.icao_tcas_ra
@@ -571,7 +615,10 @@ class IcaoPlots:
                 color = 'darkviolet'
                 bar_color = 'indigo'
                 center, dev, num_bins = 800, 100, 15
-                title_text = f'Распределение интервалов сообщений сквиттера статуса TCAS RA {display_id} (REG61)'
+                title_text = (
+                    f'Распределение интервалов сообщений сквиттера '
+                    f'статуса TCAS RA {display_id} (REG61)'
+                )
             
             elif mode == 'reg62_hist':
                 data_source = self.icao_target_state
@@ -579,7 +626,10 @@ class IcaoPlots:
                 color = 'gold'
                 bar_color = 'darkorange'
                 center, dev, num_bins = 1250, 50, 15
-                title_text = f'Распределение интервалов сообщений сквиттера состояния и статуса цели {display_id} (REG62)'
+                title_text = (
+                    f'Распределение интервалов сообщений сквиттера '
+                    f'состояния и статуса цели {display_id} (REG62)'
+                )
 
             elif mode == 'reg65_1_hist':
                 data_source = self.icao_air_op_status
@@ -587,7 +637,10 @@ class IcaoPlots:
                 color = 'mediumaquamarine'
                 bar_color = 'lightseagreen'
                 center, dev, num_bins = 2500, 100, 15
-                title_text = f'Распределение интервалов сообщений сквиттера эксплуатационного статуса в полете {display_id} (REG65)'    
+                title_text = (
+                    f'Распределение интервалов сообщений сквиттера '
+                    f'эксплуатационного статуса в полете {display_id} (REG65)'
+                )  
             
             elif mode == 'reg65_2_hist':
                 data_source = self.icao_surf_op_status
@@ -595,7 +648,10 @@ class IcaoPlots:
                 color = 'mediumaquamarine'
                 bar_color = 'lightseagreen'
                 center, dev, num_bins = 2500, 100, 15
-                title_text = f'Распределение интервалов сообщений сквиттера эксплуатационного статуса на земле {display_id} (REG65)'  
+                title_text = (
+                    f'Распределение интервалов сообщений сквиттера '
+                    f'эксплуатационного статуса на земле {display_id} (REG65)'
+                )
 
             elif mode == 'df11_hist':
                 data_source = self.icao_df11_ts
@@ -603,13 +659,15 @@ class IcaoPlots:
                 color = 'orange'
                 bar_color = 'darkorange'
                 center, dev, num_bins = 1000, 200, 15
-                title_text = f'Распределение интервалов сообщений сквиттера опознавания {display_id} (DF11)'
+                title_text = (
+                    f'Распределение интервалов сообщений сквиттера '
+                    f'опознавания {display_id} (DF11)'
+                )
             
             if icao in data_source and len(data_source[icao]) > 0:
                 timestamps = np.array(sorted(data_source[icao]))
                 intervals = np.diff(timestamps) * 1000
                 intervals = intervals[intervals >= 0]
-                
                 if len(intervals) > 0:
                     low = center - dev
                     high = center + dev
@@ -674,7 +732,13 @@ class IcaoPlots:
                     self.has_plot_data = True
                     self.fig.canvas.draw_idle()
                 else:
-                    self.ax.text(0.5, 0.5, f"Нет данных {name} для {icao}", ha='center', va='center', fontsize=15)
+                    self.ax.text(
+                        0.5, 0.5, 
+                        f"Нет данных {name} для {icao}", 
+                        ha='center', 
+                        va='center', 
+                        fontsize=15
+                    )
                     self.has_plot_data = False
             
             else:

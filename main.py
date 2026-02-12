@@ -191,7 +191,6 @@ if __name__ == '__main__':
                                 is_emg = False
                         except Exception:
                             is_emg = False
-
                         if is_emg:
                             icao_emg_ts[aa].append(timestamp)
                         else:
@@ -209,7 +208,6 @@ if __name__ == '__main__':
 
                 elif tc == 29:
                     icao_target_state_ts[aa].append(timestamp)
-
                     sel_alt = get_selected_altitude(message_str)
                     if sel_alt:
                         sel_alt_value, modes = sel_alt
@@ -264,8 +262,8 @@ if __name__ == '__main__':
             gnss_flag = "Да" if icao_has_gnss.get(icao) else "Нет"
             print(f"{icao:<8} {callsign:<12} {first_utc_str:<33} "
                   f"{last_utc_str:<33} "
-                  f"{coord_flag:<12} {course_flag:<8} {sel_alt_flag:<12} {alt_diff_flag:<12} {baro_corr_flag:<10} "
-                  f"{gnss_flag:<6}")
+                  f"{coord_flag:<12} {course_flag:<8} {sel_alt_flag:<12} {alt_diff_flag:<12} "
+                  f"{baro_corr_flag:<10} {gnss_flag:<6}")
 
         print(f"\nВсего бортов: {len(adsb_icao_list)}\n")
         
@@ -274,8 +272,8 @@ if __name__ == '__main__':
                    icao_callsigns, icao_selected_altitude, icao_altitude_difference, 
                    icao_baro_correction, icao_airborne_pos_ts, icao_surface_pos_ts, icao_ident_ts,
                    icao_spd_ts, icao_status_ts, icao_emg_ts, icao_mode_a_ts, icao_tcas_ts,
-                   icao_target_state_ts, icao_air_op_status_ts, icao_surf_op_status_ts, icao_acq_ts, icao_track_angles,
-                   icao_gs_spd_ts, icao_airspd_ts)
+                   icao_target_state_ts, icao_air_op_status_ts, icao_surf_op_status_ts, icao_acq_ts, 
+                   icao_track_angles, icao_gs_spd_ts, icao_airspd_ts)
         
     except FileNotFoundError:
         print(f"Файл {file_path} не найден")

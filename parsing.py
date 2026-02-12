@@ -29,10 +29,11 @@ def parse_ads_b_line(line):
 # извлечение барометрической высоты из сообщения
 def get_altitude(msg_str):
     try:
-        # проверяем, что это ads-b сообщение
+        # это ads-b сообщение
         df = pms.df(msg_str)
-        if df not in [17, 18]: return None
-        # проверяем, что это сообщение о положении (тип 9-18)
+        if df not in [17, 18]: 
+            return None
+        # сообщение о положении (тип 9-18 или 20-22)
         tc = pms.adsb.typecode(msg_str)
         if 9 <= tc <= 18 or 20 <= tc <= 22:
             return pms.adsb.altitude(msg_str)
@@ -43,11 +44,10 @@ def get_altitude(msg_str):
 # извлечение скорости из сообщения
 def get_velocity(msg_str):
     try:
-        # это ads-b сообщение
         df = pms.df(msg_str)
         if df not in [17, 18]: 
             return None
-        # проверяем, что это сообщение о скорости (тип 19)
+        # сообщение о скорости (тип 19)
         tc = pms.adsb.typecode(msg_str)
         if tc == 19:
             result = pms.adsb.velocity(msg_str)
@@ -60,10 +60,10 @@ def get_velocity(msg_str):
 # функция извлекает курс из сообщения
 def get_course(msg_str):
     try:
-        # проверяем, что это ads-b сообщение
         df = pms.df(msg_str)
-        if df not in [17, 18]: return None
-        # также проверяем, что это сообщение о скорости (тип 19)
+        if df not in [17, 18]: 
+            return None
+        # сообщение о скорости (тип 19)
         tc = pms.adsb.typecode(msg_str)
         if tc == 19:
             _, heading, _, _ = pms.adsb.velocity(msg_str)
@@ -109,9 +109,9 @@ def get_track_angle(msg_str):
 # функция извлекает выбранную на автопилоте высоту и режимы
 def get_selected_altitude(msg_str):
     try:
-        # проверяем, что это ads-b сообщение
         df = pms.df(msg_str)
-        if df not in [17, 18]: return None
+        if df not in [17, 18]: 
+            return None
         # проверяем, что это сообщение о статусе (тип 29)
         tc = pms.adsb.typecode(msg_str)
         if tc != 29: return None
@@ -129,9 +129,9 @@ def get_selected_altitude(msg_str):
 # получение разности высот
 def get_altitude_difference(msg_str):
     try:
-        # проверяем, что это ads-b сообщение
         df = pms.df(msg_str)
-        if df not in [17, 18]: return None
+        if df not in [17, 18]: 
+            return None
         # проверяем, что это сообщение о скорости (тип 19)
         tc = pms.adsb.typecode(msg_str)
         if tc != 19:
@@ -148,9 +148,9 @@ def get_altitude_difference(msg_str):
 # получение барокоррекции
 def get_baro_correction(msg_str):
     try:
-        # проверяем, что это ads-b сообщение
         df = pms.df(msg_str)
-        if df not in [17, 18]: return None
+        if df not in [17, 18]: 
+            return None
         # проверяем, что это сообщение о статусе (тип 29)
         tc = pms.adsb.typecode(msg_str)
         if tc != 29:
@@ -171,14 +171,15 @@ def get_baro_correction(msg_str):
 # функция извлекает позывной (callsign)
 def get_callsign(msg_str):
     try:
-        # проверяем, что это ads-b сообщение
         df = pms.df(msg_str)
-        if df not in [17, 18]: return None
+        if df not in [17, 18]: 
+            return None
         # проверяем, что это сообщение идентификации (тип 1-4)
         tc = pms.adsb.typecode(msg_str)
         if 1 <= tc <= 4:
             callsign = pms.adsb.callsign(msg_str)
-            if not callsign: return None
+            if not callsign: 
+                return None
             # очищаем позывной от лишних символов
             return ''.join(c for c in callsign if c.isalnum())
         return None

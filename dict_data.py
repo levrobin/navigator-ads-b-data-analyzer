@@ -11,7 +11,6 @@ MODE_MAP = {
     'C': 'HDG'      # selected heading
 }
 
-
 # для сбора данных
 icao_times = {}
 icao_altitude = defaultdict(list)
@@ -42,11 +41,9 @@ icao_ident_ts = defaultdict(list)
 # reg 09
 icao_spd_ts = defaultdict(list)
 
+# reg 61
 last_mode_a = {}
 change_event_start = {}
-
-
-# reg 61
 icao_status_ts = defaultdict(list)
 icao_emg_ts = defaultdict(list)
 icao_tcas_ts = defaultdict(list)
