@@ -1,16 +1,27 @@
 import numpy as np
+import matplotlib
+matplotlib.use('QtAgg')
+matplotlib.rcParams['xtick.alignment'] = 'right'
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from matplotlib.widgets import *
+from matplotlib.ticker import *
+from PySide6 import QtGui
 from time_formatter import timestamp_to_utc
 from dict_data import *
 
 class IcaoPlots:
-    def __init__(self, alt_dict, spd_dict, pos_dict, course_dict, adsb_icao_list, icao_callsigns, 
-                 icao_sel_alt, icao_alt_diff, icao_baro_correction, icao_airborne_pos_ts, 
-                 icao_surface_pos_ts, icao_ident_ts, icao_speed_ts, icao_status, icao_emg_ts, 
-                 icao_mode_change, icao_tcas_ra, icao_target_state, icao_air_op_status, 
-                 icao_surf_op_status, icao_acq_ts, icao_track_angles, icao_gs_spd_ts, icao_airspd_ts):
+    def __init__(self, adsb_icao_list, alt_dict, spd_dict, pos_dict, course_dict, icao_callsigns, 
+                 icao_sel_alt, icao_alt_diff, icao_baro_correction, 
+                 icao_airborne_pos, 
+                 icao_surface_pos, 
+                 icao_ident_air, icao_ident_ground_hwr, icao_ident_ground_lwr,
+                 icao_speed, 
+                 icao_status, icao_emg, icao_mode_change, icao_tcas_ra, 
+                 icao_target_state, 
+                 icao_air_op_status, icao_air_op_status_change, icao_surf_op_status_hwr, icao_surf_op_status_lwr,
+                 icao_acq,
+                 icao_track_angles, icao_gs_spd_ts, icao_airspd_ts):
         
         self.icao_list = sorted(list(adsb_icao_list))
         self.has_plot_data = False
@@ -29,56 +40,67 @@ class IcaoPlots:
         self.icao_airspd_ts_dict = icao_airspd_ts or {}
 
         # reg 05
-        self.icao_airborne_pos_ts = icao_airborne_pos_ts or {}
+        self.icao_airborne_pos_ts = icao_airborne_pos or {}
         
         # reg 06
-        self.icao_surface_pos_ts = icao_surface_pos_ts or {}
+        self.icao_surface_pos_ts = icao_surface_pos or {}
                 
         # reg 08
-        self.icao_ident_ts = icao_ident_ts or {}
+        self.icao_ident_air_ts = icao_ident_air or {}
+        self.icao_ident_ground_hwr_ts = icao_ident_ground_hwr or {}
+        self.icao_ident_ground_lwr_ts = icao_ident_ground_lwr or {}
 
         # reg 09
-        self.icao_speed_ts = icao_speed_ts or {}
+        self.icao_speed_ts = icao_speed or {}
 
         # reg 61
-        self.icao_status = icao_status or {}
-        self.icao_emg_ts = icao_emg_ts or {}
-        self.icao_mode_change = icao_mode_change or {}
-        self.icao_tcas_ra = icao_tcas_ra or {}
+        self.icao_status_ts = icao_status or {}
+        self.icao_emg_ts = icao_emg or {}
+        self.icao_mode_change_ts = icao_mode_change or {}
+        self.icao_tcas_ra_ts = icao_tcas_ra or {}
 
         # reg 62
         self.icao_target_state = icao_target_state or {}
         
         # reg 65
         self.icao_air_op_status = icao_air_op_status or {}
-        self.icao_surf_op_status = icao_surf_op_status or {}
+        self.icao_air_op_status_change = icao_air_op_status_change or {}
+        self.icao_surf_op_status_hwr = icao_surf_op_status_hwr or {}
+        self.icao_surf_op_status_lwr = icao_surf_op_status_lwr or {}
 
         # df 11
-        self.icao_df11_ts = icao_acq_ts or {}
+        self.icao_df11_ts = icao_acq or {}
 
         self.icao_index = 0
         
         # список доступных режимов (типов графиков и гистограмм)
-        self.graph_modes = ['altitude', 'speed', 'altitude_speed_combined', 
-                           'latitude', 'course', 'track', 'altitude_diff', 'baro_correction',
-                           'reg09_tracks', 'track_angle', 'airspd_angle']
+        self.graph_modes = [
+            'altitude', 'speed', 'altitude_speed_combined', 'latitude', 
+            'course', 'track', 'altitude_diff', 'baro_correction',
+            'reg09_tracks', 'track_angle', 'airspd_angle'
+        ]
         
-        self.hist_modes = ['reg05_hist', 'reg06_1_hist', 'reg06_2_hist', 'reg08_hist', 
-                           'reg09_hist', 'reg61_1_hist', 'reg61_2_hist', 'reg61_3_hist', 
-                           'reg61_4_hist', 'reg62_hist', 'reg65_1_hist', 
-                           'reg65_2_hist', 'df11_hist']
+        self.hist_modes = [
+            'reg05_hist', 
+            'reg06_1_hist', 'reg06_2_hist', 
+            'reg08_1_hist', 'reg08_2_hist', 'reg08_3_hist', 
+            'reg09_hist', 
+            'reg61_1_hist', 'reg61_2_hist', 'reg61_3_hist', 'reg61_4_hist', 
+            'reg62_hist', 
+            'reg65_1_hist', 'reg65_2_hist', 'reg65_3_hist', 'reg65_4_hist', 
+            'df11_hist'
+        ]
 
         self.current_mode_group = 'graphs'
         self.plot_modes = self.graph_modes
         self.plot_mode_idx = 0
-        self.ylims = {mode: {} for mode in self.graph_modes}
+        self.ylims = { mode: {} for mode in self.graph_modes }
 
         # пределы осей y по умолчанию при первом открытии
         self.default_ylims = {
             'altitude': (-1200, 40000), 
             'speed': (0, 500), 
             'course': (0, 360), 
-            'track_angle': (0, 360),
             'latitude': 'auto',
             'altitude_speed_combined': (0, 40000),
             'altitude_diff': (-2000, 2000),
@@ -89,25 +111,31 @@ class IcaoPlots:
         self.fig, self.ax = plt.subplots(figsize=(13, 7))
         self.fig.canvas.manager.set_window_title('Графики бортов')
         # пространство для кнопок
-        plt.subplots_adjust(left=0.25, bottom=0.25) 
+        plt.subplots_adjust(bottom=0.35)
         
         # атрибут для хранения ссылки на правую ось y
         self.ax2 = None
 
         # области для кнопок
-        ax_prev_icao = plt.axes([0.05, 0.05, 0.2, 0.075])
-        ax_next_icao = plt.axes([0.28, 0.05, 0.2, 0.075])
-        ax_prev_mode = plt.axes([0.52, 0.05, 0.2, 0.075])
-        ax_next_mode = plt.axes([0.75, 0.05, 0.2, 0.075])
+        self.ax_prev_icao = plt.axes([0.22, 0.05, 0.16, 0.075])
+        self.ax_next_icao = plt.axes([0.40, 0.05, 0.16, 0.075])
+        self.ax_prev_mode = plt.axes([0.60, 0.05, 0.16, 0.075])
+        self.ax_next_mode = plt.axes([0.78, 0.05, 0.16, 0.075])
 
-        ax_radio = plt.axes([0.02, 0.60, 0.15, 0.15])
+        self.ax_radio = plt.axes([0.05, 0.045, 0.12, 0.10])
         
         # кнопки
-        self.btn_prev_icao = Button(ax_prev_icao, '<- Пред. борт', color='lightblue', hovercolor='skyblue')
-        self.btn_next_icao = Button(ax_next_icao, 'След. борт ->', color='lightblue', hovercolor='skyblue')
-        self.btn_prev_mode = Button(ax_prev_mode, '<- Пред. график', color='lightgreen', hovercolor='limegreen')
-        self.btn_next_mode = Button(ax_next_mode, 'След. график ->', color='lightgreen', hovercolor='limegreen')
-        self.radio_mode = RadioButtons(ax_radio, ['Графики', 'Гистограммы'], active=0)
+        self.btn_prev_icao = Button(self.ax_prev_icao, '<- Пред. борт', color='lightblue', hovercolor='skyblue')
+        self.btn_next_icao = Button(self.ax_next_icao, 'След. борт ->', color='lightblue', hovercolor='skyblue')
+        self.btn_prev_mode = Button(self.ax_prev_mode, '<- Пред. график', color='lightgreen', hovercolor='limegreen')
+        self.btn_next_mode = Button(self.ax_next_mode, 'След. график ->', color='lightgreen', hovercolor='limegreen')
+
+        btns_style = [self.btn_prev_icao, self.btn_next_icao, self.btn_prev_mode, self.btn_next_mode]
+
+        for btns in btns_style:
+            btns.label.set_fontsize(12)
+
+        self.radio_mode = RadioButtons(self.ax_radio, ['Графики', 'Гистограммы'], active=0)
         self.radio_mode.on_clicked(self.on_radio_changed)
 
         # привязка функций-обработчиков к кнопкам
@@ -117,33 +145,36 @@ class IcaoPlots:
         self.btn_next_mode.on_clicked(self.next_mode)
         self.radio_mode.on_clicked(self.on_radio_changed)
         
-        # подключение обработчиков событий клавиатуры и колеса мыши к окну
+        # обработчики событий клавиатуры и колеса мыши
         self.fig.canvas.mpl_connect('key_press_event', self.on_key)
         self.fig.canvas.mpl_connect('scroll_event', self.on_scroll)
         
         # первоначальная отрисовка графика
         self.plot_current()
-        # запуск окна
-        plt.show()
 
+        manager = plt.get_current_fig_manager()
+        manager.window.setWindowIcon(QtGui.QIcon("img/airplane.png"))
         if not self.icao_list:
             self.ax.text(
                 0.5, 0.5, 
                 f"Нет данных для построения графиков", 
-                ha='center', va='center'
+                ha='center', va='center', fontsize=15
             )
             self.has_plot_data = False
+        
+        # запуск окна
+        plt.show()
 
     # отрисовка текущего графика, вызывается при любом изменении
     def plot_current(self):
-        # удаляем вторую ось y, если она осталась от предыдущего графика
+        # удаление второй оси y, если она осталась от предыдущего графика
         if self.ax2:
             self.ax2.remove()
             self.ax2 = None
-        # полностью очищаем основную область рисования
+        # очистка основную области графиков
         self.ax.clear()
         
-        # принудительно сбрасываем соотношение сторон к стандартному ('auto')
+        # сброс соотношения сторон к стандартному
         self.ax.set_aspect('auto')
 
         # если нет данных
@@ -151,16 +182,16 @@ class IcaoPlots:
             self.ax.text(
                 0.5, 0.5, 
                 "Нет бортов с данными для отображения", 
-                ha='center', va='center'
+                ha='center', va='center', fontsize=15
             )
             self.fig.canvas.draw_idle()
             return
         
-        # текущий выбранный icao и режим (тип графика)
+        # текущий выбранный icao и тип графика
         icao = self.icao_list[self.icao_index]
         mode = self.plot_modes[self.plot_mode_idx]
         
-        # заголовок с позывным и активными режимами автопилота
+        # позывной и активные режимы автопилота
         callsign = self.icao_callsigns.get(icao, "N/A")
         modes_key = f"{icao}_modes"
         active_modes = self.icao_callsigns.get(modes_key, set())
@@ -184,41 +215,54 @@ class IcaoPlots:
         if mode == 'altitude':
             # получаем данные о высоте для текущего icao
             data = self.alt_dict.get(icao, [])
-            sel_data = self.sel_alt_dict.get(icao, []) 
+            sel_data = self.sel_alt_dict.get(icao, [])
             title, label = f"Высота: {display_id}", "Высота (футы)"
-            # если данных нет, выводим сообщение
+
+            # если нет данных
             if not data and not sel_data:
-                self.ax.text(0.5, 0.5, f"Нет данных о высоте для борта {icao}", ha='center', va='center')
+                self.ax.text(
+                    0.5, 0.5, 
+                    f"Нет данных о высоте для борта {icao}", 
+                    ha='center', va='center', fontsize=15
+                )
                 self.has_plot_data = False
             else:
                 # баро и GNSS высоты
                 baro_times, baro_values = [], []
                 gnss_times, gnss_values = [], []
-                
-                for t, v, alt_type in sorted(data):
+
+                sorted_data = sorted(data)
+                for t, v, alt_type in sorted_data:
+                    utc = timestamp_to_utc(t)
                     if alt_type == 'baro':
-                        baro_times.append(timestamp_to_utc(t))
+                        baro_times.append(utc)
                         baro_values.append(v)
                     elif alt_type == 'gnss':
-                        gnss_times.append(timestamp_to_utc(t))
+                        gnss_times.append(utc)
                         gnss_values.append(v)
                 
                 # отрисовка баро высоты
                 if baro_times:
-                    self.ax.plot(baro_times, baro_values, 'o-', markersize=3, 
+                    self.ax.plot(baro_times, baro_values, '-', markersize=3, 
                                 label='Барометрическая высота', color='blue')
                 
                 # отрисовка GNSS высоты
                 if gnss_times:
-                    self.ax.plot(gnss_times, gnss_values, 's-', markersize=4, 
+                    self.ax.plot(gnss_times, gnss_values, '-', markersize=4, 
                                 label='GNSS высота', color='cyan', alpha=0.7)
                 
                 # отрисовка выбранной высоты
                 if sel_data:
-                    times = [timestamp_to_utc(t) for t, v in sorted(sel_data)]
-                    values = [v for t, v in sorted(sel_data)]
-                    self.ax.step(times, values, where='post', label='Выбранная высота', 
-                                color='red', linestyle='--')
+                    sorted_sel_data = sorted(sel_data)
+                    times, values = [], []
+
+                    for t, v in sorted_sel_data:
+                        times.append(timestamp_to_utc(t))
+                        values.append(v)
+                    self.ax.step(
+                        times, values, where='post', label='Выбранная высота', 
+                        color='red', linestyle='--'
+                    )
                 
                 self.has_plot_data = True
         
@@ -227,11 +271,14 @@ class IcaoPlots:
             data = self.spd_dict.get(icao, [])
             title, label = f"Скорость: {display_id}", "Скорость (узлы)"
             if not data:
-                self.ax.text(0.5, 0.5, f"Нет данных о скорости для борта {icao}", ha='center', va='center')
+                self.ax.text(0.5, 0.5, 
+                             f"Нет данных о скорости для борта {icao}", 
+                             ha='center', va='center', fontsize=15)
                 self.has_plot_data = False
             else:
-                times = [timestamp_to_utc(t) for t, v in sorted(data)]
-                values = [v for t, v in sorted(data)]
+                sorted_data = sorted(data)
+                times = [timestamp_to_utc(t) for t, v in sorted_data]
+                values = [v for t, v in sorted_data]
                 self.ax.plot(times, values, 'o-', markersize=3, label='Скорость', color='green')
                 self.has_plot_data = True
 
@@ -240,9 +287,13 @@ class IcaoPlots:
             title = f"Высота и скорость: {display_id}"
             alt_data = self.alt_dict.get(icao)
             spd_data = self.spd_dict.get(icao)
-            
+
             if not alt_data and not spd_data:
-                self.ax.text(0.5, 0.5, f"Нет данных о высоте и скорости для борта {icao}", ha='center', va='center')
+                self.ax.text(
+                    0.5, 0.5, 
+                    f"Нет данных о высоте и скорости для борта {icao}", 
+                    ha='center', va='center', fontsize=15
+                )
                 self.has_plot_data = False
             else:
                 # настройка левой оси y для высоты
@@ -256,37 +307,52 @@ class IcaoPlots:
                 self.ax2.set_ylim(0, 500)
 
                 # отрисовка данных и сбор информации для общей легенды
-                lines1, labels1, lines2, labels2 = [], [], [], []
+                lines1, labels1 = [], []
+                lines2, labels2 = [], []
                 if alt_data:
                     alt_times = []
                     alt_values = []
-                    for t, v, alt_type in sorted(alt_data):
+                    sorted_alt_data = sorted(alt_data)
+                    for t, v, alt_type in sorted_alt_data:
                         alt_times.append(timestamp_to_utc(t))
                         alt_values.append(v)
-                    line, = self.ax.plot(alt_times, alt_values, 'o-', markersize=3, label='Высота', color='blue')
+                    line, = self.ax.plot(
+                        alt_times, alt_values, '-', markersize=3, 
+                        label='Высота', color='blue'
+                    )
+                    
                     lines1.append(line)
                     labels1.append('Высота')
                 if spd_data:
-                    spd_times = [timestamp_to_utc(t) for t, v in sorted(spd_data)]
-                    spd_values = [v for t, v in sorted(spd_data)]
-                    line, = self.ax2.plot(spd_times, spd_values, 'o-', markersize=3, label='Скорость', color='green')
+                    sorted_spd = sorted(spd_data)
+                    spd_times = [timestamp_to_utc(t) for t, v in sorted_spd]
+                    spd_values = [v for t, v in sorted_spd]
+
+                    line, = self.ax2.plot(
+                        spd_times, spd_values, '-', markersize=3, 
+                        label='Скорость', color='green'
+                    )
+
                     lines2.append(line)
                     labels2.append('Скорость')
                 
-                # создание общей легенды для обеих осей
+                # общая легенда
                 self.ax.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
+                self.has_plot_data = True
 
         # график широты
         elif mode == 'latitude':
             data = self.pos_dict.get(icao, [])
             title, label = f"Координаты: {display_id}", "Широта (°)"
             if not data:
-                self.ax.text(0.5, 0.5, f"Нет данных о координатах для борта {icao}", ha='center', va='center')
+                self.ax.text(0.5, 0.5, 
+                             f"Нет данных о координатах для борта {icao}", 
+                             ha='center', va='center', fontsize=15)
                 self.has_plot_data = False
             else:
                 times = [timestamp_to_utc(t) for t, lat, lon in data]
                 lats = [lat for t, lat, lon in data]
-                self.ax.plot(times, lats, 'o-', markersize=3, label='Широта', color='orange')
+                self.ax.plot(times, lats, '-', markersize=3, label='Широта', color='orange')
                 self.has_plot_data = True
 
         # график курса
@@ -297,39 +363,31 @@ class IcaoPlots:
                 self.ax.text(
                     0.5, 0.5, 
                     f"Нет данных о курсе для борта {icao}", 
-                    ha='center', va='center'
+                    ha='center', va='center', fontsize=15
                 )
                 self.has_plot_data = False
             else:
-                times = [timestamp_to_utc(t) for t, v in sorted(data)]
-                values = [v for t, v in sorted(data)]
-                self.ax.plot(times, values, 'o-', markersize=3, label='Курс', color='purple')
+                sorted_data = sorted(data)
+                times = [timestamp_to_utc(t) for t, v in sorted_data]
+                values = [v for t, v in sorted_data]
+                self.ax.plot(times, values, '-', markersize=3, label='Курс', color='purple')
                 self.has_plot_data = True
-
-        # трек полёта (карта)
-        elif mode == 'track':
-            data = self.pos_dict.get(icao, [])
-            title = f"Схема трека полёта: {display_id}"
-            if not data:
-                self.ax.text(0.5, 0.5, f"Нет данных о координатах для борта {icao}", ha='center', va='center')
-                self.has_plot_data = False
-            else:
-                lons = [lon for t, lat, lon in data]
-                lats = [lat for t, lat, lon in data]
-                self.ax.plot(lons, lats, 'o', markersize=2, label='Трек')
 
         # график разницы высот
         elif mode == 'altitude_diff':
             data = self.alt_diff_dict.get(icao, [])
-            title, label = f"Разница высот (DIF_FROM_BARO_ALT): {display_id}", "Разница высот (футы)"
+            title, label = f"Разница высот: {display_id}", "Разница высот (футы)"
             
             if not data:
-                self.ax.text(0.5, 0.5, f"Нет данных о разнице высот для борта {icao}", ha='center', va='center')
+                self.ax.text(0.5, 0.5, 
+                             f"Нет данных о разнице высот для борта {icao}", 
+                             ha='center', va='center', fontsize=15)
                 self.has_plot_data = False
             else:
-                times = [timestamp_to_utc(t) for t, v in sorted(data)]
-                values = [v for t, v in sorted(data)]
-                self.ax.plot(times, values, 'o-', markersize=3, label='Разница высот (выбранная - барометрическая)', color='red')
+                sorted_data = sorted(data)
+                times = [timestamp_to_utc(t) for t, v in sorted_data]
+                values = [v for t, v in sorted_data]
+                self.ax.plot(times, values, '-', markersize=3, label='Разница высот (выбранная - барометрическая)', color='red')
                 self.ax.axhline(y=0, color='gray', linestyle='--', alpha=0.7, label='Нулевая разница')
                 self.has_plot_data = True
 
@@ -339,20 +397,38 @@ class IcaoPlots:
             title, label = f"Барокоррекция: {display_id}", "Давление (гПа)"
             
             if not data:
-                self.ax.text(0.5, 0.5, f"Нет данных о барокоррекции для борта {icao}", ha='center', va='center')
+                self.ax.text(0.5, 0.5, 
+                             f"Нет данных о барокоррекции для борта {icao}", 
+                             ha='center', va='center', fontsize=15)
                 self.has_plot_data = False
             else:
-                times = [timestamp_to_utc(t) for t, v in sorted(data)]
-                values = [v for t, v in sorted(data)]
-                self.ax.plot(times, values, 'o-', markersize=3, label='Барокоррекция', color='brown')
+                sorted_data = sorted(data)
+                times = [timestamp_to_utc(t) for t, v in sorted_data]
+                values = [v for t, v in sorted_data]
+                self.ax.plot(times, values, '-', markersize=3, label='Барокоррекция', color='brown')
                 self.ax.axhline(y=1013.25, color='green', linestyle='--', alpha=0.7, label='Стандартное давление (1013.25 гПа)')
                 self.has_plot_data = True
+
+        # трек полёта (карта)
+        elif mode == 'track':
+            data = self.pos_dict.get(icao, [])
+            title = f"Схема трека полёта: {display_id}"
+            if not data:
+                self.ax.text(0.5, 0.5, 
+                             f"Нет данных о координатах для борта {icao}", 
+                             ha='center', va='center', fontsize=15)
+                self.has_plot_data = False
+            else:
+                lons = [lon for t, lat, lon in data]
+                lats = [lat for t, lat, lon in data]
+                self.ax.plot(lons, lats, 'o', markersize=2, label='Трек')
 
         elif mode == 'reg09_tracks':
             title = f"Схема трека по TC 19: {display_id}"
             if icao not in self.icao_speed_ts or icao not in self.pos_dict:
-                self.ax.text(0.5, 0.5, f"Нет данных TC 19 или координат для борта {icao}", 
-                            ha='center', va='center')
+                self.ax.text(0.5, 0.5, 
+                             f"Нет данных TC 19 или координат для борта {icao}", 
+                             ha='center', va='center', fontsize=15)
                 self.has_plot_data = False
 
             else:
@@ -367,21 +443,23 @@ class IcaoPlots:
 
                 # координаты для временных меток TC 19
                 tc19_coords = []
-                for tc19_time in sorted(tc19_times):
+                sorted_tc19_times = sorted(tc19_times)
+                for tc19_time in sorted_tc19_times:
                     rounded_time = round(tc19_time, 1)
                     if rounded_time in pos_times_dict:
                         lat, lon = pos_times_dict[rounded_time]
                         tc19_coords.append((lat, lon))
                 
                 if not tc19_coords:
-                    self.ax.text(0.5, 0.5, f"Не найдено координат для сообщений TC 19 борта {icao}", 
-                                ha='center', va='center')
+                    self.ax.text(0.5, 0.5, 
+                                 f"Не найдено координат для сообщений TC 19 борта {icao}", 
+                                 ha='center', va='center', fontsize=15)
                     self.has_plot_data = False
                 else:
                     lons = [lon for lat, lon in tc19_coords]
                     lats = [lat for lat, lon in tc19_coords]
                     
-                    self.ax.plot(lons, lats, 'o-', color='lime', linewidth=2, markersize=4, 
+                    self.ax.plot(lons, lats, '-', color='lime', linewidth=2, markersize=4, 
                                 label=f"{display_id}")
                     
                     self.ax.set_aspect('equal', adjustable='datalim')
@@ -399,7 +477,9 @@ class IcaoPlots:
             title = f"Трек и линия путевого угла: {display_id}"
 
             if not pos_data or not gs_data:
-                self.ax.text(0.5, 0.5, f"Нет данных путевого угла для борта {display_id}", ha='center')
+                self.ax.text(0.5, 0.5, 
+                             f"Нет данных путевого угла для борта {display_id}", 
+                             ha='center', va='center', fontsize=15)
                 self.has_plot_data = False
             else:
                 # полный трек
@@ -429,13 +509,15 @@ class IcaoPlots:
                 all_lons = full_lons + track_line_lons
                 all_lats = full_lats + track_line_lats
 
-                # линию последнего угла
+                # линия последнего угла
                 if track_line_lons:
                     last_angle = gs_data[-1][1]
                     self.ax.plot(track_line_lons, track_line_lats, '-', color='red', linewidth=1.5,
                                 label=f'Линия путевого угла: {last_angle:.1f}°')
                 else:
-                    self.ax.text(0.5, 0.5, f"Нет данных путевого угла для наложения", ha='center',
+                    self.ax.text(0.5, 0.5, 
+                                 f"Нет данных путевого угла для наложения", 
+                                 ha='center', fontsize=15, 
                                  transform=self.ax.transAxes)
 
                 self.ax.set_aspect('equal', adjustable='datalim')
@@ -452,7 +534,9 @@ class IcaoPlots:
             title = f"Трек и ориентация самолёта: {display_id}"
 
             if not pos_data or not spd_data:
-                self.ax.text(0.5, 0.5, f"Нет данных TC 19 subtype 3 для {icao}", ha='center')
+                self.ax.text(0.5, 0.5, 
+                             f"Нет данных TC 19 subtype 3 для {icao}", 
+                             ha='center', va='center', fontsize=15)
                 self.has_plot_data = False
             else:
                 # полный трек
@@ -463,7 +547,9 @@ class IcaoPlots:
                 track_line_lons = []
                 track_line_lats = []
 
-                for t, angle in sorted(spd_data):
+                sorted_spd_data = sorted(spd_data)
+
+                for t, angle in sorted_spd_data:
                     nearest = None
                     min_diff = None
 
@@ -495,7 +581,10 @@ class IcaoPlots:
                     self.ax.plot(track_line_lons, track_line_lats, '-', color='blue', linewidth=1.5,
                                 label=f'Магнитный курс: {last_angle:.1f}°')
                 else:
-                    self.ax.text(0.5, 0.1, "Нет данных для наложения магнитного курса", ha='center', transform=self.ax.transAxes)
+                    self.ax.text(0.5, 0.1, 
+                                 "Нет данных для наложения магнитного курса", 
+                                 ha='center', fontsize=15, 
+                                 transform=self.ax.transAxes)
 
                 self.ax.set_aspect('equal', adjustable='datalim')
                 self.ax.set_xlim(min(all_lons), max(all_lons))
@@ -504,22 +593,14 @@ class IcaoPlots:
                 self.ax.grid(True, linestyle='--', alpha=0.3)
                 self.ax.legend(fontsize=8)
                 self.has_plot_data = True
-
-        elif mode == 'track':
-            data = self.pos_dict.get(icao, [])
-            title = f"Схема трека полёта: {display_id}"
-            if not data:
-                self.ax.text(0.5, 0.5, f"Нет данных о координатах для борта {icao}", ha='center', va='center')
-                self.has_plot_data = False
-            else:
-                lons = [lon for t, lat, lon in data]
-                lats = [lat for t, lat, lon in data]
-                self.ax.plot(lons, lats, 'o', markersize=2, label='Трек')
-
+   
         # гистограммы промежутков времени
         elif mode in self.hist_modes:
             callsign = self.icao_callsigns.get(icao, "N/A")
-            display_id = f"{callsign} ({icao})" if callsign != "N/A" else icao
+            if callsign != "N/A":
+                display_id = f"{callsign} ({icao})" 
+            else:
+                display_id = icao
 
             if mode == 'reg05_hist':
                 data_source = self.icao_airborne_pos_ts
@@ -554,17 +635,39 @@ class IcaoPlots:
                     f'местоположения на земле при низкой частоте {display_id} (REG06)'
                 )
 
-            elif mode == 'reg08_hist':
-                data_source = self.icao_ident_ts
-                name = 'об опознавательном коде и категории в полете'
+            elif mode == 'reg08_1_hist':
+                data_source = self.icao_ident_air_ts
+                name = 'об опознавательном индексе и категории в полете'
                 color = 'cyan'
                 bar_color = 'skyblue'
                 center, dev, num_bins = 5000, 200, 15
                 title_text = (
                     f'Распределение интервалов сообщений сквиттера '
-                    f'опознавательного кода и категории {display_id} (REG08)'
+                    f'опознавательного кода и категории в полете {display_id} (REG08)'
                 )
-            
+
+            elif mode == 'reg08_2_hist':
+                data_source = self.icao_ident_ground_hwr_ts
+                name = 'об опознавательном индексе и категории на земле при высокой частоте'
+                color = 'cyan'
+                bar_color = 'skyblue'
+                center, dev, num_bins = 5000, 200, 15
+                title_text = (
+                    f'Распределение интервалов сообщений сквиттера '
+                    f'опознавательного индекса и категории на земле при высокой частоте {display_id} (REG08)'
+                )
+
+            elif mode == 'reg08_3_hist':
+                data_source = self.icao_ident_ground_lwr_ts
+                name = 'об опознавательном индексе и категории на земле при низкой частоте'
+                color = 'cyan'
+                bar_color = 'skyblue'
+                center, dev, num_bins = 10000, 200, 15
+                title_text = (
+                    f'Распределение интервалов сообщений сквиттера '
+                    f'опознавательного индекса и категории на земле при низкой частоте {display_id} (REG08)'
+                )
+
             elif mode == 'reg09_hist':
                 data_source = self.icao_speed_ts
                 name = 'о скорости при нахождении в воздухе'
@@ -577,7 +680,7 @@ class IcaoPlots:
                 )
 
             elif mode == 'reg61_1_hist':
-                data_source = self.icao_status
+                data_source = self.icao_status_ts
                 name = 'о статусе воздушного судна для'
                 color = 'darkviolet'
                 bar_color = 'indigo'
@@ -599,7 +702,7 @@ class IcaoPlots:
                 )
 
             elif mode == 'reg61_3_hist':
-                data_source = self.icao_mode_change
+                data_source = self.icao_mode_change_ts
                 name = 'о статусe смены Mode A'
                 color = 'darkviolet'
                 bar_color = 'indigo'
@@ -610,7 +713,7 @@ class IcaoPlots:
                 )
             
             elif mode == 'reg61_4_hist':
-                data_source = self.icao_tcas_ra
+                data_source = self.icao_tcas_ra_ts
                 name = 'о статусe передачи TCAS RA'
                 color = 'darkviolet'
                 bar_color = 'indigo'
@@ -643,14 +746,36 @@ class IcaoPlots:
                 )  
             
             elif mode == 'reg65_2_hist':
-                data_source = self.icao_surf_op_status
-                name = 'об эксплуатационном статусе на земле'
+                data_source = self.icao_air_op_status_change
+                name = 'об эксплуатационном статусе в полете с признаком change'
                 color = 'mediumaquamarine'
                 bar_color = 'lightseagreen'
                 center, dev, num_bins = 2500, 100, 15
                 title_text = (
                     f'Распределение интервалов сообщений сквиттера '
-                    f'эксплуатационного статуса на земле {display_id} (REG65)'
+                    f'эксплуатационного статуса в полете с признаком change {display_id} (REG65)'
+                )
+
+            elif mode == 'reg65_3_hist':
+                data_source = self.icao_surf_op_status_hwr
+                name = 'об эксплуатационном статусе на земле при высокой частоте'
+                color = 'mediumaquamarine'
+                bar_color = 'lightseagreen'
+                center, dev, num_bins = 2500, 100, 15
+                title_text = (
+                    f'Распределение интервалов сообщений сквиттера '
+                    f'эксплуатационного статуса на земле при высокой частоте {display_id} (REG65)'
+                )  
+            
+            elif mode == 'reg65_4_hist':
+                data_source = self.icao_surf_op_status_lwr
+                name = 'об эксплуатационном статусе на земле при низкой частоте'
+                color = 'mediumaquamarine'
+                bar_color = 'lightseagreen'
+                center, dev, num_bins = 2500, 100, 15
+                title_text = (
+                    f'Распределение интервалов сообщений сквиттера '
+                    f'эксплуатационного статуса на земле при низкой частоте {display_id} (REG65)'
                 )
 
             elif mode == 'df11_hist':
@@ -668,6 +793,7 @@ class IcaoPlots:
                 timestamps = np.array(sorted(data_source[icao]))
                 intervals = np.diff(timestamps) * 1000
                 intervals = intervals[intervals >= 0]
+
                 if len(intervals) > 0:
                     low = center - dev
                     high = center + dev
@@ -677,36 +803,42 @@ class IcaoPlots:
                     right = intervals[intervals > high]
                     
                     bar_width = (high - low) / num_bins
-                    
-                    bin_edges = np.concatenate(([0], np.linspace(low, high, num_bins + 1)))
-                    self.ax.hist(
-                        middle,
-                        bins=bin_edges,
-                        alpha=0.6,
+                    bin_edges = np.linspace(low, high, num_bins + 1)
+                    counts, _ = np.histogram(middle, bins=bin_edges)
+
+                    self.ax.bar(
+                        bin_edges[:-1],
+                        counts,
+                        width=bar_width,
+                        align='edge',
                         color=color,
                         edgecolor='black',
-                        label=f"{center-dev}-{center+dev}: {len(middle)}"
+                        alpha=0.6,
+                        label=f"{low}-{high}: {len(middle)}"
                     )
 
-                    self.ax.bar(
-                        low - bar_width,
-                        len(left),
-                        width=bar_width,
-                        align='edge',
-                        color=bar_color,
-                        edgecolor='black',
-                        label=f"0–{center-dev}: {len(left)}"
-                    )
+                    # крайние столбцы
+                    if len(left) > 0:
+                        self.ax.bar(
+                            low - bar_width,
+                            len(left),
+                            width=bar_width,
+                            align='edge',
+                            color=bar_color,
+                            edgecolor='black',
+                            label=f"< {low}: {len(left)}"
+                        )
 
-                    self.ax.bar(
-                        high,
-                        len(right),
-                        width=bar_width,
-                        align='edge',
-                        color=bar_color,
-                        edgecolor='black',
-                        label=f"> {center+dev}: {len(right)}"
-                    )
+                    if len(right) > 0:
+                        self.ax.bar(
+                            high,
+                            len(right),
+                            width=bar_width,
+                            align='edge',
+                            color=bar_color,
+                            edgecolor='black',
+                            label=f"> {high}: {len(right)}"
+                        )
 
                     min_interval = intervals.min()
                     max_interval = intervals.max()
@@ -714,9 +846,12 @@ class IcaoPlots:
                     self.ax.set_xlim(low - bar_width, high + bar_width)
                     self.ax.axvline(low, linestyle='--', color='black', alpha=0.8)
                     self.ax.axvline(high, linestyle='--', color='black', alpha=0.8)
-                    self.ax.set_xlabel('Интервал между сообщениями (мс)')
-                    self.ax.set_ylabel('Количество')
+                    self.ax.set_xlabel('Интервал между сообщениями (мс)', fontsize=12)
+                    self.ax.set_ylabel('Количество', fontsize=12)
+                    self.ax.xaxis.labelpad = 17
+                    self.ax.yaxis.labelpad = 17
                     self.ax.set_title(title_text)
+
                     self.ax.legend(title=f"Всего интервалов {len(intervals)}")
 
                     stats_text = f"Min: {round(min_interval, 2)} мс\nMax: {round(max_interval, 2)} мс"
@@ -729,8 +864,10 @@ class IcaoPlots:
                         bbox=dict(facecolor='white', alpha=0.8)
                     )
                     self.ax.grid(True, linestyle='--', alpha=0.7)
+                    self.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
                     self.has_plot_data = True
                     self.fig.canvas.draw_idle()
+
                 else:
                     self.ax.text(
                         0.5, 0.5, 
@@ -740,7 +877,7 @@ class IcaoPlots:
                         fontsize=15
                     )
                     self.has_plot_data = False
-            
+
             else:
                 self.ax.text(0.5, 0.5, f"Нет данных {name} для {icao}", ha='center', va='center', fontsize=15)
                 self.has_plot_data = False
@@ -762,23 +899,27 @@ class IcaoPlots:
             or mode == 'gs_spd_angle' or mode == 'airspd_angle':
             # равномасштабные оси
             self.ax.set_aspect('equal', adjustable='datalim')
-            self.ax.set_xlabel("Долгота (°)")
-            self.ax.set_ylabel("Широта (°)")
+            self.ax.set_xlabel("Долгота (°)", fontsize=12)
+            self.ax.set_ylabel("Широта (°)", fontsize=12)
         # общие настройки для временных графиков
         else:
-            self.ax.set_xlabel("Время (UTC)")
+            self.ax.set_xlabel("Время (UTC)", fontsize=12)
             # форматируем подписи на оси x для отображения времени
             self.ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S.%f'))
-            # автоматически поворачиваем подписи, чтобы они не накладывались друг на друга
-            self.fig.autofmt_xdate(rotation=30)
+
+            self.fig.canvas.draw()
+            # поворачиваем подписи и выравниваем по правому краю
+            self.ax.tick_params(axis='x', labelrotation=35)
+            self.ax.xaxis.labelpad = 17
             if mode != 'altitude_speed_combined':
-                self.ax.set_ylabel(label)
+                self.ax.set_ylabel(label, fontsize=12)
+                self.ax.yaxis.labelpad = 17
         
         # отображение легенды, если она есть
         if self.ax.get_legend_handles_labels()[0] and mode != 'altitude_speed_combined':
             self.ax.legend()
 
-        # применение сохранённого масштаба (кроме комбинированного графика)
+        # применение сохраненного масштаба (кроме комбинированного графика)
         if mode != 'altitude_speed_combined':
             ylim = self.ylims[mode].get(icao, self.default_ylims.get(mode))
             if ylim and ylim != 'auto':
@@ -817,7 +958,7 @@ class IcaoPlots:
             if xdata is None or ydata is None: 
                 return
 
-            # вычисляем новые пределы по осям x и y
+            # новые пределы по осям x и y
             new_width = (cur_xlim[1] - cur_xlim[0]) * scale_factor
             new_height = (cur_ylim[1] - cur_ylim[0]) * scale_factor
             rel_x = (cur_xlim[1] - xdata) / (cur_xlim[1] - cur_xlim[0])
@@ -835,7 +976,7 @@ class IcaoPlots:
             new_height = (cur_ylim[1] - cur_ylim[0]) * scale_factor
             rel_y = (cur_ylim[1] - ydata) / (cur_ylim[1] - cur_ylim[0])
             
-            # устанавливаем новые пределы для оси y
+            # новые пределы для оси y
             self.ax.set_ylim([ydata - new_height * (1-rel_y), ydata + new_height * rel_y])
 
         # обновляем график
@@ -848,8 +989,6 @@ class IcaoPlots:
         self.current_mode_group = 'graphs'
         self.plot_modes = self.graph_modes
         self.plot_mode_idx = 0
-        if hasattr(self, 'radio_mode'):
-            self.radio_mode.set_active(0)
         self.plot_current()
    
     def show_hists(self, event=None):
@@ -858,8 +997,6 @@ class IcaoPlots:
         self.current_mode_group = 'hists'
         self.plot_modes = self.hist_modes
         self.plot_mode_idx = 0
-        if hasattr(self, 'radio_mode'):
-            self.radio_mode.set_active(1)
         self.plot_current()
 
     def on_radio_changed(self, label):
@@ -902,3 +1039,6 @@ class IcaoPlots:
             self.next_mode()
         elif event.key == 'down': 
             self.prev_mode()
+
+    def close(self):
+        plt.close(self.fig)

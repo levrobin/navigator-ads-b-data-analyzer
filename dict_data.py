@@ -30,12 +30,16 @@ icao_track_angles = defaultdict(list)
 icao_gs_spd_ts = defaultdict(list)
 icao_airspd_ts = defaultdict(list)
 
+icao_state = {}
 # reg 05
 icao_airborne_pos_ts = defaultdict(list)
 # reg 06
 icao_surface_pos_ts = defaultdict(list)
 
 # reg 08
+icao_ident_air_ts = defaultdict(list)
+icao_ident_ground_hwr_ts = defaultdict(list)
+icao_ident_ground_lwr_ts = defaultdict(list)
 icao_ident_ts = defaultdict(list)
 
 # reg 09
@@ -53,8 +57,11 @@ icao_mode_a_ts = defaultdict(list)
 icao_target_state_ts = defaultdict(list)
 
 # reg 65
+last_op_status_state = {}
 icao_air_op_status_ts = defaultdict(list)
-icao_surf_op_status_ts = defaultdict(list)
+icao_air_op_status_change_ts = defaultdict(list)
+icao_surf_op_status_hwr_ts = defaultdict(list)
+icao_surf_op_status_lwr_ts = defaultdict(list)
 
 # df 11
 icao_acq_ts = defaultdict(list)
