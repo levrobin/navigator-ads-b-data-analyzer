@@ -64,7 +64,7 @@
     * **Windows:**
         Открыть терминал (CMD или PowerShell) и выполнить команду:
         ```bash
-        pip install numpy pyModeS matplotlib
+        pip install numpy pyModeS matplotlib PySide6
         ```
 
     * **Linux (Ubuntu/Debian):**
@@ -87,7 +87,7 @@
 
         в) **Установить Python-библиотеки** (в активном окружении):
         ```bash
-        pip install numpy pyModeS matplotlib
+        pip install numpy pyModeS matplotlib PySide6
         ```
         *Примечание: для каждой новой сессии терминала окружение нужно активировать заново.*
 
