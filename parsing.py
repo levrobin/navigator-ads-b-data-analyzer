@@ -382,8 +382,17 @@ def parse_ads_b_file(file_path, target_icao=None):
                 if subtype != 1:
                     continue
 
-                squawk = emergency_squawk(message_str) if message_str else None
-                is_emg = is_emergency(message_str)
+                try:
+                    squawk = emergency_squawk(message_str)
+
+                except Exception:
+                    squawk = None
+
+                try:
+                    is_emg = is_emergency(message_str)
+                    
+                except Exception:
+                    is_emg = False
 
                 prev = last_mode_a.get(aa)
                 is_change = (
