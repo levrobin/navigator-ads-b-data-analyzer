@@ -72,7 +72,7 @@
 
         а) **Установить системные зависимости:**
         ```bash
-        sudo apt update && sudo apt install python3-tk python3-venv
+        sudo apt update && sudo apt install python3-venv
         ```
 
         б) **Создать и активировать виртуальное окружение** (в папке с проектом):
@@ -87,7 +87,7 @@
 
         в) **Установить Python-библиотеки** (в активном окружении):
         ```bash
-        pip install numpy pyModeS matplotlib PySide6
+        pip install numpy "pyModeS<3" matplotlib PySide6
         ```
         *Примечание: для каждой новой сессии терминала окружение нужно активировать заново.*
 

@@ -8,19 +8,6 @@ from table_window import *
 from PySide6.QtGui import *
 import sys
 
-MAX_MESSAGE_LENGTH = 32
-DEFAULT_FILE = "data/2025-12-29.1766986424.606828104.t4433"
-
-pms_df = pms.df
-pms_icao = pms.icao
-pms_tc = pms.adsb.typecode
-pms_oe_flag = pms.adsb.oe_flag
-pms_pos = pms.adsb.position
-hex2bin = pms.common.hex2bin
-bin2int = pms.common.bin2int
-pms_velocity = pms.adsb.velocity
-emergency_squawk = pms.adsb.emergency_squawk
-
 def open_graphs_for_set(icao_set):
     if not icao_set:
         return
@@ -62,7 +49,7 @@ if __name__ == '__main__':
     app.setWindowIcon(QIcon('img/airplane.png'))
     # парсинг аргументов из командной строки
     parser = argparse.ArgumentParser()
-    parser.add_argument("-f", "--file", help="Имя входного файла", default=DEFAULT_FILE)
+    parser.add_argument("-f", "--file", help="Имя входного файла", default=None)
     parser.add_argument("-a", "--aircraft", help="ICAO адрес конкретного борта")
     args = parser.parse_args()
 
@@ -71,11 +58,12 @@ if __name__ == '__main__':
     
     try:
         # основной цикл чтения файла
-        parse_ads_b_file(file_path, target_icao)
+        if file_path:
+            parse_ads_b_file(file_path, target_icao)
 
-        if target_icao and target_icao not in adsb_icao_list:
-            QMessageBox.warning(None, "Ошибка", f"Борт {target_icao} не найден")
-            sys.exit(0)
+            if target_icao and target_icao not in adsb_icao_list:
+                QMessageBox.warning(None, "Ошибка", f"Борт {target_icao} не найден")
+                sys.exit(0)
         # итоговая сводная таблица
         table_window = TableWindow(
             adsb_icao_list, icao_times, icao_callsigns, 

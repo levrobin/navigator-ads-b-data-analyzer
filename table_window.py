@@ -33,7 +33,16 @@ class TableWindow(QWidget):
         self.open_file_btn.setFixedHeight(33)
         self.open_file_btn.clicked.connect(self.select_file)
 
+        self.welcome_label = QLabel()
+        self.welcome_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        font_welcome = self.welcome_label.font()
+        font_welcome.setPointSize(14)
+        self.welcome_label.setFont(font_welcome)
+
         self.table = QTableWidget(0, 10, self)
+
+        self.table.hide()
+        self.welcome_label.show()
 
         # стиль окна сводной таблицы
         self.setStyleSheet("""
@@ -107,7 +116,13 @@ class TableWindow(QWidget):
         top_layout.addWidget(self.open_file_btn)
         top_layout.addWidget(self.all_plots_btn)
         layout.addLayout(top_layout)
-        layout.addWidget(self.table)
+
+        # layout.addWidget(self.table)
+        self.stack_layout = QVBoxLayout()
+        self.stack_layout.addWidget(self.welcome_label)
+        self.stack_layout.addWidget(self.table)
+
+        layout.addLayout(self.stack_layout)
     
     def fill_table(self):
         self.table.setRowCount(0)
@@ -143,6 +158,14 @@ class TableWindow(QWidget):
             self.add_table_item(row, 7, alt_diff_flag)
             self.add_table_item(row, 8, baro_corr_flag)
             self.add_table_item(row, 9, gnss_flag)
+
+        if self.table.rowCount() == 0:
+            self.table.hide()
+            self.welcome_label.setText("Выберите файл для загрузки ADS-B данных")
+            self.welcome_label.show()
+        else:
+            self.welcome_label.hide()
+            self.table.show()
 
         self.total_label.setText(f"\nВсего бортов: {len(self.adsb_icao_list)}\n")
         
