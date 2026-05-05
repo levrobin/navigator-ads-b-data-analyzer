@@ -1,4 +1,3 @@
-import pyModeS as pms
 import argparse
 from dict_data import *
 from parsing import *
@@ -7,24 +6,54 @@ from time_formatter import *
 from table_window import *
 from PySide6.QtGui import *
 import sys
+from adsb_data import *
+
+adsb_data = AdsbData(
+    # параметры полета
+    altitude=icao_altitude,
+    speed=icao_speed,
+    positions=icao_positions,
+    courses=icao_courses,
+    callsigns=icao_callsigns,
+    sel_alt=icao_selected_altitude,
+    altitude_diff=icao_altitude_difference,
+    baro_corr=icao_baro_correction,
+
+    # временные метки
+    airborne_pos_ts=icao_airborne_pos_ts,
+    surface_pos_ts=icao_surface_pos_ts,
+
+    ident_air_ts=icao_ident_air_ts,
+    ident_ground_hwr_ts=icao_ident_ground_hwr_ts,
+    ident_ground_lwr_ts=icao_ident_ground_lwr_ts,
+
+    spd_ts=icao_spd_ts,
+
+    status_ts=icao_status_ts,
+    emg_ts=icao_emg_ts,
+    mode_a_ts=icao_mode_a_ts,
+    tcas_ts=icao_tcas_ts,
+
+    target_state_ts=icao_target_state_ts,
+
+    air_op_status_ts=icao_air_op_status_ts,
+    air_op_status_change_ts=icao_air_op_status_change_ts,
+    surf_op_status_hwr_ts=icao_surf_op_status_hwr_ts,
+    surf_op_status_lwr_ts=icao_surf_op_status_lwr_ts,
+
+    acq_ts=icao_acq_ts,
+
+    track_angles=icao_track_angles,
+    gs_spd_ts=icao_gs_spd_ts,
+    airspd_ts=icao_airspd_ts
+)
 
 def open_graphs_for_set(icao_set):
     if not icao_set:
         return
     
     plots_window = IcaoPlots(
-        icao_set, icao_altitude, icao_speed, icao_positions, icao_courses, 
-        icao_callsigns, icao_selected_altitude, icao_altitude_difference, 
-        icao_baro_correction, 
-        icao_airborne_pos_ts, 
-        icao_surface_pos_ts, 
-        icao_ident_air_ts, icao_ident_ground_hwr_ts, icao_ident_ground_lwr_ts,
-        icao_spd_ts, 
-        icao_status_ts, icao_emg_ts, icao_mode_a_ts, icao_tcas_ts, 
-        icao_target_state_ts, 
-        icao_air_op_status_ts, icao_air_op_status_change_ts, icao_surf_op_status_hwr_ts, icao_surf_op_status_lwr_ts,
-        icao_acq_ts, 
-        icao_track_angles, icao_gs_spd_ts, icao_airspd_ts
+        icao_set, adsb_data
     )
 
     table_window.graph_windows.append(plots_window)
@@ -42,6 +71,13 @@ def open_graphs_for_row(row, column):
     open_graphs_for_set({icao})
 
 def open_graphs_for_all():
+    if not adsb_icao_list:
+        QMessageBox.warning(
+            table_window, 
+            "Нет данных", 
+            f"Файл не загружен или список бортов пуст"
+        )
+    
     open_graphs_for_set(set(adsb_icao_list))
 
 if __name__ == '__main__':
@@ -67,8 +103,8 @@ if __name__ == '__main__':
         # итоговая сводная таблица
         table_window = TableWindow(
             adsb_icao_list, icao_times, icao_callsigns, 
-            icao_positions, icao_courses, icao_has_selected_alt,
-            icao_altitude_difference, icao_baro_correction,                        
+            icao_positions, icao_courses, icao_has_selected_alt, 
+            icao_altitude_difference, icao_baro_correction, 
             icao_has_gnss
         )
         table_window.show()

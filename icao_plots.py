@@ -9,67 +9,53 @@ from matplotlib.ticker import *
 from PySide6 import QtGui
 from time_formatter import timestamp_to_utc
 from dict_data import *
+from adsb_data import *
 
 class IcaoPlots:
-    def __init__(self, adsb_icao_list, alt_dict, spd_dict, pos_dict, course_dict, icao_callsigns, 
-                 icao_sel_alt, icao_alt_diff, icao_baro_correction, 
-                 icao_airborne_pos, 
-                 icao_surface_pos, 
-                 icao_ident_air, icao_ident_ground_hwr, icao_ident_ground_lwr,
-                 icao_speed, 
-                 icao_status, icao_emg, icao_mode_change, icao_tcas_ra, 
-                 icao_target_state, 
-                 icao_air_op_status, icao_air_op_status_change, icao_surf_op_status_hwr, icao_surf_op_status_lwr,
-                 icao_acq,
-                 icao_track_angles, icao_gs_spd_ts, icao_airspd_ts):
-        
+    def __init__(self, adsb_icao_list, data: AdsbData):
         self.icao_list = sorted(list(adsb_icao_list))
         self.has_plot_data = False
+        self.data = data
 
-        # словари с данными
-        self.alt_dict = alt_dict
-        self.spd_dict = spd_dict
-        self.pos_dict = pos_dict
-        self.course_dict = course_dict
-        self.icao_callsigns = icao_callsigns
-        self.sel_alt_dict = icao_sel_alt or {}
-        self.alt_diff_dict = icao_alt_diff or {}
-        self.baro_correction_dict = icao_baro_correction or {} 
-        self.track_angle_dict = icao_track_angles or {}
-        self.icao_gs_spd_ts_dict = icao_gs_spd_ts or {}
-        self.icao_airspd_ts_dict = icao_airspd_ts or {}
+        # параметры полета
+        self.alt_dict = data.altitude
+        self.spd_dict = data.speed
+        self.pos_dict = data.positions
+        self.course_dict = data.courses
+        self.icao_callsigns = data.callsigns
+        self.sel_alt_dict = data.sel_alt
+        self.alt_diff_dict = data.altitude_diff
+        self.baro_correction_dict = data.baro_corr
 
+        self.track_angle_dict = data.track_angles
+        self.icao_gs_spd_ts_dict = data.gs_spd_ts
+        self.icao_airspd_ts_dict = data.airspd_ts
+
+        # временные интервалы
         # reg 05
-        self.icao_airborne_pos_ts = icao_airborne_pos or {}
-        
+        self.icao_airborne_pos_ts = data.airborne_pos_ts
         # reg 06
-        self.icao_surface_pos_ts = icao_surface_pos or {}
-                
+        self.icao_surface_pos_ts = data.surface_pos_ts 
         # reg 08
-        self.icao_ident_air_ts = icao_ident_air or {}
-        self.icao_ident_ground_hwr_ts = icao_ident_ground_hwr or {}
-        self.icao_ident_ground_lwr_ts = icao_ident_ground_lwr or {}
-
+        self.icao_ident_air_ts = data.ident_air_ts
+        self.icao_ident_ground_hwr_ts = data.ident_ground_hwr_ts
+        self.icao_ident_ground_lwr_ts = data.ident_ground_lwr_ts
         # reg 09
-        self.icao_speed_ts = icao_speed or {}
-
+        self.icao_speed_ts = data.spd_ts
         # reg 61
-        self.icao_status_ts = icao_status or {}
-        self.icao_emg_ts = icao_emg or {}
-        self.icao_mode_change_ts = icao_mode_change or {}
-        self.icao_tcas_ra_ts = icao_tcas_ra or {}
-
+        self.icao_status_ts = data.status_ts
+        self.icao_emg_ts = data.emg_ts
+        self.icao_mode_change_ts = data.mode_a_ts
+        self.icao_tcas_ra_ts = data.tcas_ts
         # reg 62
-        self.icao_target_state = icao_target_state or {}
-        
+        self.icao_target_state = data.target_state_ts
         # reg 65
-        self.icao_air_op_status = icao_air_op_status or {}
-        self.icao_air_op_status_change = icao_air_op_status_change or {}
-        self.icao_surf_op_status_hwr = icao_surf_op_status_hwr or {}
-        self.icao_surf_op_status_lwr = icao_surf_op_status_lwr or {}
-
+        self.icao_air_op_status = data.air_op_status_ts
+        self.icao_air_op_status_change = data.air_op_status_change_ts
+        self.icao_surf_op_status_hwr = data.surf_op_status_hwr_ts
+        self.icao_surf_op_status_lwr = data.surf_op_status_lwr_ts
         # df 11
-        self.icao_df11_ts = icao_acq or {}
+        self.icao_df11_ts = data.acq_ts
 
         self.icao_index = 0
         
@@ -213,7 +199,7 @@ class IcaoPlots:
 
         # блок отрисовки графика высоты
         if mode == 'altitude':
-            # получаем данные о высоте для текущего icao
+            # данные о высоте для текущего icao
             data = self.alt_dict.get(icao, [])
             sel_data = self.sel_alt_dict.get(icao, [])
             title, label = f"Высота: {display_id}", "Высота (футы)"
@@ -266,7 +252,7 @@ class IcaoPlots:
                 
                 self.has_plot_data = True
         
-        # блок отрисовки графика скорости
+        # график скорости
         elif mode == 'speed':
             data = self.spd_dict.get(icao, [])
             title, label = f"Скорость: {display_id}", "Скорость (узлы)"
@@ -423,6 +409,7 @@ class IcaoPlots:
                 lats = [lat for t, lat, lon in data]
                 self.ax.plot(lons, lats, 'o', markersize=2, label='Трек')
 
+        # трек полёта по TC 19
         elif mode == 'reg09_tracks':
             title = f"Схема трека по TC 19: {display_id}"
             if icao not in self.icao_speed_ts or icao not in self.pos_dict:
@@ -471,6 +458,7 @@ class IcaoPlots:
                     
                     self.has_plot_data = True
 
+        # трек и линия путевого угла
         elif mode == 'track_angle':
             pos_data = self.pos_dict.get(icao, [])
             gs_data  = self.icao_gs_spd_ts_dict.get(icao, [])
@@ -528,10 +516,11 @@ class IcaoPlots:
                 self.ax.legend(fontsize=8)
                 self.has_plot_data = True
 
+        # трек и ориентация
         elif mode == 'airspd_angle':
             spd_data = self.icao_airspd_ts_dict.get(icao, [])
             pos_data = self.pos_dict.get(icao, [])
-            title = f"Трек и ориентация самолёта: {display_id}"
+            title = f"Трек и ориентация: {display_id}"
 
             if not pos_data or not spd_data:
                 self.ax.text(0.5, 0.5, 
@@ -933,14 +922,14 @@ class IcaoPlots:
         # если нет данных для борта
         if not self.has_plot_data:
             return
-        # если курсор не над осями, ничего не делаем
+        # если курсор не над осями, никаких действий не происходит
         if event.inaxes != self.ax: 
             return
 
         base_scale = 1.2
         mode = self.plot_modes[self.plot_mode_idx]
         
-        # определяем направление прокрутки
+        # направление прокрутки
         if event.button == 'up':
             scale_factor = 1 / base_scale # приближение
         elif event.button == 'down':
@@ -948,7 +937,7 @@ class IcaoPlots:
         else:
             return
 
-        # специальная логика для 2d-масштабирования карты
+        # логика для 2d-масштабирования карты
         if mode == 'track' or mode == 'reg09_tracks' or mode == 'track_angle' \
             or mode == 'gs_spd_angle' or mode == 'airspd_angle':
             cur_xlim = self.ax.get_xlim()
@@ -968,7 +957,7 @@ class IcaoPlots:
             self.ax.set_xlim([xdata - new_width * (1 - rel_x), xdata + new_width * rel_x])
             self.ax.set_ylim([ydata - new_height * (1 - rel_y), ydata + new_height * rel_y])
         
-        # стандартная логика для 1d-масштабирования по оси y
+        # логика для 1d-масштабирования по оси y
         else:
             cur_ylim = self.ax.get_ylim()
             ydata = event.ydata if event.ydata is not None else (cur_ylim[0] + cur_ylim[1]) / 2
