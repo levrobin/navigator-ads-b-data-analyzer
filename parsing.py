@@ -43,14 +43,9 @@ def parse_ads_b_line(line):
     return timestamp, message_spaced, message_str
 
 # извлечение барометрической высоты из сообщения
-def get_altitude(msg_str):
+def get_altitude(msg_str, tc):
     try:
-        # это ads-b сообщение
-        df = pms.df(msg_str)
-        if df not in [17, 18]: 
-            return None
         # сообщение о положении (тип 9-18 или 20-22)
-        tc = pms.adsb.typecode(msg_str)
         if 9 <= tc <= 18 or 20 <= tc <= 22:
             return pms.adsb.altitude(msg_str)
         return None
@@ -58,13 +53,8 @@ def get_altitude(msg_str):
         return None
 
 # извлечение скоростных данных
-def get_velocity_data(msg_str):
+def get_velocity_data(msg_str, tc):
     try:
-        df = pms.df(msg_str)
-        if df not in [17, 18]: 
-            return None
-
-        tc = pms.adsb.typecode(msg_str)
         if tc != 19:
             return None
 
@@ -99,13 +89,9 @@ def get_velocity_data(msg_str):
         return None
 
 # функция извлекает выбранную на автопилоте высоту и режимы
-def get_selected_altitude(msg_str):
+def get_selected_altitude(msg_str, tc):
     try:
-        df = pms.df(msg_str)
-        if df not in [17, 18]: 
-            return None
         # это сообщение о статусе (тип 29)
-        tc = pms.adsb.typecode(msg_str)
         if tc != 29: 
             return None
         
@@ -125,14 +111,9 @@ def get_selected_altitude(msg_str):
         return None
 
 # получение разности высот
-def get_altitude_difference(msg_str):
+def get_altitude_difference(msg_str, tc):
     try:
-        df = pms.df(msg_str)
-        if df not in [17, 18]: 
-            return None
-        
         # это сообщение о скорости (тип 19)
-        tc = pms.adsb.typecode(msg_str)
         if tc != 19:
             return None
         
@@ -146,13 +127,9 @@ def get_altitude_difference(msg_str):
         return None
 
 # получение барокоррекции
-def get_baro_correction(msg_str):
+def get_baro_correction(msg_str, tc):
     try:
-        df = pms.df(msg_str)
-        if df not in [17, 18]: 
-            return None
         # это сообщение о статусе (тип 29)
-        tc = pms.adsb.typecode(msg_str)
         if tc != 29:
             return None
         
@@ -169,13 +146,9 @@ def get_baro_correction(msg_str):
         return None
 
 # получение позывного (callsign)
-def get_callsign(msg_str):
+def get_callsign(msg_str, tc):
     try:
-        df = pms.df(msg_str)
-        if df not in [17, 18]: 
-            return None
         # это сообщение идентификации (тип 1-4)
-        tc = pms.adsb.typecode(msg_str)
         if 1 <= tc <= 4:
             callsign = pms.adsb.callsign(msg_str)
             if not callsign: 
@@ -228,7 +201,7 @@ def parse_ads_b_file(file_path, target_icao=None):
                 continue
 
             # только ads-b сообщения
-            if df not in (17, 18): 
+            if df != 17:
                 continue 
 
             try:
@@ -238,7 +211,7 @@ def parse_ads_b_file(file_path, target_icao=None):
                 continue
 
             # фильтрация по заданному борту
-            if target_icao and aa != target_icao: 
+            if target_icao and aa != target_icao:
                 continue
 
             adsb_icao_list.add(aa)
@@ -287,7 +260,7 @@ def parse_ads_b_file(file_path, target_icao=None):
                 state["airborne"] = True
                 state["ground"] = False
 
-                alt = get_altitude(message_str)
+                alt = get_altitude(message_str, tc)
                 if alt is not None and -1000 <= alt <= 50000:
                     icao_altitude[aa].append((timestamp, alt, 'baro'))
                 
@@ -313,7 +286,7 @@ def parse_ads_b_file(file_path, target_icao=None):
                 msg_bin = hex2bin(message_str)
                 subtype = bin2int(msg_bin[37:40])
 
-                v = get_velocity_data(message_str)
+                v = get_velocity_data(message_str, tc)
                 if not v:
                     continue
                 speed = v["speed"]
@@ -335,7 +308,7 @@ def parse_ads_b_file(file_path, target_icao=None):
                     icao_courses[aa].append((timestamp, angle))
                 
                 # разница высот
-                alt_diff = get_altitude_difference(message_str)
+                alt_diff = get_altitude_difference(message_str, tc)
                 if alt_diff is not None:
                     icao_altitude_difference[aa].append((timestamp, alt_diff))
                     icao_has_gnss[aa] = True
@@ -346,7 +319,7 @@ def parse_ads_b_file(file_path, target_icao=None):
                 state["airborne"] = True
                 state["ground"] = False
 
-                alt = get_altitude(message_str)
+                alt = get_altitude(message_str, tc)
                 if alt is not None and -1000 <= alt <= 50000:
                     icao_altitude[aa].append((timestamp, alt, 'gnss'))
                     icao_has_gnss[aa] = True
@@ -359,38 +332,30 @@ def parse_ads_b_file(file_path, target_icao=None):
                     icao_ident_ground_hwr_ts[aa].append(timestamp)
                 elif state["ground"] and state["surface_lwr"]:
                     icao_ident_ground_lwr_ts[aa].append(timestamp)
-
-                cs = get_callsign(message_str)
+                cs = get_callsign(message_str, tc)
                 if cs:
                     icao_callsigns[aa] = cs
 
             elif tc == 28:
                 msg_bin = hex2bin(message_str)
                 subtype = bin2int(msg_bin[37:40])
-
                 try:
                     if pms_tcas_ra(message_str):
                         icao_tcas_ts[aa].append(timestamp)
                         continue
                 except Exception:
                     pass
-
                 if subtype == 2:
                     icao_tcas_ts[aa].append(timestamp)
                     continue
-
                 if subtype != 1:
                     continue
-
                 try:
                     squawk = emergency_squawk(message_str)
-
                 except Exception:
                     squawk = None
-
                 try:
                     is_emg = is_emergency(message_str)
-                    
                 except Exception:
                     is_emg = False
 
@@ -404,15 +369,12 @@ def parse_ads_b_file(file_path, target_icao=None):
 
                 if squawk is not None:
                     last_mode_a[aa] = squawk
-
                 if is_change:
                     change_event_start[aa] = timestamp
-
                 in_change_window = (
                     aa in change_event_start and
                     (timestamp - change_event_start[aa] <= 24.5)
                 )
-
                 if is_emg or squawk in ("7500", "7600", "7700"):
                     icao_emg_ts[aa].append(timestamp)
                 elif in_change_window:
@@ -422,7 +384,7 @@ def parse_ads_b_file(file_path, target_icao=None):
                         
             elif tc == 29:
                 icao_target_state_ts[aa].append(timestamp)
-                sel_alt = get_selected_altitude(message_str)
+                sel_alt = get_selected_altitude(message_str, tc)
                 if sel_alt:
                     sel_alt_value, modes = sel_alt
                     icao_selected_altitude[aa].append((timestamp, sel_alt_value))
@@ -430,9 +392,8 @@ def parse_ads_b_file(file_path, target_icao=None):
                     modes_key = f"{aa}_modes"
                     existing_modes = icao_callsigns.get(modes_key, set())
                     icao_callsigns[modes_key] = existing_modes.union(modes)
-                
                 # барокоррекция
-                baro_corr = get_baro_correction(message_str)
+                baro_corr = get_baro_correction(message_str, tc)
                 if baro_corr is not None:
                     icao_baro_correction[aa].append((timestamp, baro_corr))
 
@@ -442,26 +403,20 @@ def parse_ads_b_file(file_path, target_icao=None):
 
                 current_state = get_op_status_key(message_str)
                 prev_state = last_op_status_state.get(aa)
-
                 is_change = prev_state is not None and prev_state != current_state
-
                 last_op_status_state[aa] = current_state
-
                 if subtype == 0:
                     icao_air_op_status_ts[aa].append(timestamp)
-
                     if is_change:
                         icao_air_op_status_change_ts[aa].append(timestamp)
 
                 elif subtype == 1:
                     if state["ground"] and state["surface_lwr"]:
                         icao_surf_op_status_lwr_ts[aa].append(timestamp)
-
                         if is_change:
                             icao_air_op_status_change_ts[aa].append(timestamp)
 
                     elif state["ground"] and state["surface_hwr"]:
                         icao_surf_op_status_hwr_ts[aa].append(timestamp)
-
                         if is_change:
                             icao_air_op_status_change_ts[aa].append(timestamp)

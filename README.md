@@ -64,11 +64,11 @@
     * **Windows:**
         Открыть терминал (CMD или PowerShell) и выполнить команду:
         ```bash
-        pip install numpy pyModeS matplotlib PySide6
+        pip install numpy "pyModeS<3" matplotlib PySide6
         ```
 
     * **Linux (Ubuntu/Debian):**
-        Рекомендуется использовать виртуальное окружение (`venv`).
+        *Для Ubuntu 23.04 и выше необходимо использовать виртуальное окружение (`venv`).*
 
         а) **Установить системные зависимости:**
         ```bash

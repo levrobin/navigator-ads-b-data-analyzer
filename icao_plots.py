@@ -93,7 +93,7 @@ class IcaoPlots:
             'baro_correction': (950, 1050)
         }
 
-        # окно и основная области для рисования (осей)
+        # окно и основная область для рисования
         self.fig, self.ax = plt.subplots(figsize=(13, 7))
         self.fig.canvas.manager.set_window_title('Графики бортов')
         # пространство для кнопок
@@ -139,6 +139,13 @@ class IcaoPlots:
         self.plot_current()
 
         manager = plt.get_current_fig_manager()
+        toolbar = manager.toolbar
+
+        for action in toolbar.actions():
+            if action.text() in ['Home', 'Back', 'Forward', 'Subplots', 'Zoom', 'Customize']:
+                action.setVisible(False)
+
+        toolbar.pan()
         manager.window.setWindowIcon(QtGui.QIcon("img/airplane.png"))
         if not self.icao_list:
             self.ax.text(
@@ -209,7 +216,8 @@ class IcaoPlots:
                 self.ax.text(
                     0.5, 0.5, 
                     f"Нет данных о высоте для борта {icao}", 
-                    ha='center', va='center', fontsize=15
+                    ha='center', va='center', fontsize=15,
+                    transform=self.ax.transAxes
                 )
                 self.has_plot_data = False
             else:
@@ -241,7 +249,6 @@ class IcaoPlots:
                 if sel_data:
                     sorted_sel_data = sorted(sel_data)
                     times, values = [], []
-
                     for t, v in sorted_sel_data:
                         times.append(timestamp_to_utc(t))
                         values.append(v)
@@ -257,9 +264,12 @@ class IcaoPlots:
             data = self.spd_dict.get(icao, [])
             title, label = f"Скорость: {display_id}", "Скорость (узлы)"
             if not data:
-                self.ax.text(0.5, 0.5, 
-                             f"Нет данных о скорости для борта {icao}", 
-                             ha='center', va='center', fontsize=15)
+                self.ax.text(
+                    0.5, 0.5, 
+                    f"Нет данных о скорости для борта {icao}", 
+                    ha='center', va='center', fontsize=15,
+                    transform=self.ax.transAxes
+                )
                 self.has_plot_data = False
             else:
                 sorted_data = sorted(data)
@@ -278,7 +288,8 @@ class IcaoPlots:
                 self.ax.text(
                     0.5, 0.5, 
                     f"Нет данных о высоте и скорости для борта {icao}", 
-                    ha='center', va='center', fontsize=15
+                    ha='center', va='center', fontsize=15,
+                    transform=self.ax.transAxes
                 )
                 self.has_plot_data = False
             else:
@@ -287,7 +298,7 @@ class IcaoPlots:
                 self.ax.tick_params(axis='y', labelcolor='blue')
                 self.ax.set_ylim(0, 40000)
                 # создание и настройка правой оси y для скорости
-                self.ax2 = self.ax.twinx() # создаём и сохраняем вторую ось
+                self.ax2 = self.ax.twinx() # создание второй оси
                 self.ax2.set_ylabel("Скорость (узлы)", color='green')
                 self.ax2.tick_params(axis='y', labelcolor='green')
                 self.ax2.set_ylim(0, 500)
@@ -349,7 +360,8 @@ class IcaoPlots:
                 self.ax.text(
                     0.5, 0.5, 
                     f"Нет данных о курсе для борта {icao}", 
-                    ha='center', va='center', fontsize=15
+                    ha='center', va='center', fontsize=15,
+                    transform=self.ax.transAxes
                 )
                 self.has_plot_data = False
             else:
@@ -365,9 +377,12 @@ class IcaoPlots:
             title, label = f"Разница высот: {display_id}", "Разница высот (футы)"
             
             if not data:
-                self.ax.text(0.5, 0.5, 
-                             f"Нет данных о разнице высот для борта {icao}", 
-                             ha='center', va='center', fontsize=15)
+                self.ax.text(
+                    0.5, 0.5, 
+                    f"Нет данных о разнице высот для борта {icao}", 
+                    ha='center', va='center', fontsize=15,
+                    transform=self.ax.transAxes
+                )
                 self.has_plot_data = False
             else:
                 sorted_data = sorted(data)
@@ -383,9 +398,12 @@ class IcaoPlots:
             title, label = f"Барокоррекция: {display_id}", "Давление (гПа)"
             
             if not data:
-                self.ax.text(0.5, 0.5, 
-                             f"Нет данных о барокоррекции для борта {icao}", 
-                             ha='center', va='center', fontsize=15)
+                self.ax.text(
+                    0.5, 0.5, 
+                    f"Нет данных о барокоррекции для борта {icao}", 
+                    ha='center', va='center', fontsize=15,
+                    transform=self.ax.transAxes
+                )
                 self.has_plot_data = False
             else:
                 sorted_data = sorted(data)
@@ -400,22 +418,33 @@ class IcaoPlots:
             data = self.pos_dict.get(icao, [])
             title = f"Схема трека полёта: {display_id}"
             if not data:
-                self.ax.text(0.5, 0.5, 
-                             f"Нет данных о координатах для борта {icao}", 
-                             ha='center', va='center', fontsize=15)
+                self.ax.text(
+                    0.5, 0.5, 
+                    f"Нет данных о координатах для борта {icao}", 
+                    ha='center', va='center', fontsize=15,
+                    transform=self.ax.transAxes
+                )
                 self.has_plot_data = False
             else:
                 lons = [lon for t, lat, lon in data]
                 lats = [lat for t, lat, lon in data]
                 self.ax.plot(lons, lats, 'o', markersize=2, label='Трек')
 
+                self.ax.set_xlim(min(lons), max(lons))
+                self.ax.set_ylim(min(lats), max(lats))
+
+                self.has_plot_data = True
+
         # трек полёта по TC 19
         elif mode == 'reg09_tracks':
             title = f"Схема трека по TC 19: {display_id}"
             if icao not in self.icao_speed_ts or icao not in self.pos_dict:
-                self.ax.text(0.5, 0.5, 
-                             f"Нет данных TC 19 или координат для борта {icao}", 
-                             ha='center', va='center', fontsize=15)
+                self.ax.text(
+                    0.5, 0.5, 
+                    f"Нет данных TC 19 или координат для борта {icao}", 
+                    ha='center', va='center', fontsize=15,
+                    transform=self.ax.transAxes
+                )
                 self.has_plot_data = False
 
             else:
@@ -438,16 +467,19 @@ class IcaoPlots:
                         tc19_coords.append((lat, lon))
                 
                 if not tc19_coords:
-                    self.ax.text(0.5, 0.5, 
-                                 f"Не найдено координат для сообщений TC 19 борта {icao}", 
-                                 ha='center', va='center', fontsize=15)
+                    self.ax.text(
+                        0.5, 0.5, 
+                        f"Не найдено координат для сообщений TC 19 борта {icao}", 
+                        ha='center', va='center', fontsize=15,
+                        transform=self.ax.transAxes
+                    )
                     self.has_plot_data = False
                 else:
                     lons = [lon for lat, lon in tc19_coords]
                     lats = [lat for lat, lon in tc19_coords]
                     
                     self.ax.plot(lons, lats, '-', color='lime', linewidth=2, markersize=4, 
-                                label=f"{display_id}")
+                                label='Трек по TC 19')
                     
                     self.ax.set_aspect('equal', adjustable='datalim')
                     self.ax.set_xlabel("Долгота (°)")
@@ -465,9 +497,12 @@ class IcaoPlots:
             title = f"Трек и линия путевого угла: {display_id}"
 
             if not pos_data or not gs_data:
-                self.ax.text(0.5, 0.5, 
-                             f"Нет данных путевого угла для борта {display_id}", 
-                             ha='center', va='center', fontsize=15)
+                self.ax.text(
+                    0.5, 0.5, 
+                    f"Нет данных путевого угла для борта {display_id}", 
+                    ha='center', va='center', fontsize=15,
+                    transform=self.ax.transAxes
+                )
                 self.has_plot_data = False
             else:
                 # полный трек
@@ -503,10 +538,12 @@ class IcaoPlots:
                     self.ax.plot(track_line_lons, track_line_lats, '-', color='red', linewidth=1.5,
                                 label=f'Линия путевого угла: {last_angle:.1f}°')
                 else:
-                    self.ax.text(0.5, 0.5, 
-                                 f"Нет данных путевого угла для наложения", 
-                                 ha='center', fontsize=15, 
-                                 transform=self.ax.transAxes)
+                    self.ax.text(
+                        0.5, 0.5, 
+                        f"Нет данных путевого угла для наложения", 
+                        ha='center', fontsize=15, 
+                        transform=self.ax.transAxes
+                    )
 
                 self.ax.set_aspect('equal', adjustable='datalim')
                 self.ax.set_xlim(min(all_lons), max(all_lons))
@@ -523,9 +560,12 @@ class IcaoPlots:
             title = f"Трек и ориентация: {display_id}"
 
             if not pos_data or not spd_data:
-                self.ax.text(0.5, 0.5, 
-                             f"Нет данных TC 19 subtype 3 для {icao}", 
-                             ha='center', va='center', fontsize=15)
+                self.ax.text(
+                    0.5, 0.5, 
+                    f"Нет данных TC 19 subtype 3 для {icao}", 
+                    ha='center', va='center', fontsize=15,
+                    transform=self.ax.transAxes
+                )
                 self.has_plot_data = False
             else:
                 # полный трек
@@ -570,10 +610,12 @@ class IcaoPlots:
                     self.ax.plot(track_line_lons, track_line_lats, '-', color='blue', linewidth=1.5,
                                 label=f'Магнитный курс: {last_angle:.1f}°')
                 else:
-                    self.ax.text(0.5, 0.1, 
-                                 "Нет данных для наложения магнитного курса", 
-                                 ha='center', fontsize=15, 
-                                 transform=self.ax.transAxes)
+                    self.ax.text(
+                        0.5, 0.1, 
+                        "Нет данных для наложения магнитного курса", 
+                        ha='center', fontsize=15, 
+                        transform=self.ax.transAxes
+                    )
 
                 self.ax.set_aspect('equal', adjustable='datalim')
                 self.ax.set_xlim(min(all_lons), max(all_lons))
@@ -863,12 +905,18 @@ class IcaoPlots:
                         f"Нет данных {name} для {icao}", 
                         ha='center', 
                         va='center', 
-                        fontsize=15
+                        fontsize=15,
+                        transform=self.ax.transAxes
                     )
                     self.has_plot_data = False
 
             else:
-                self.ax.text(0.5, 0.5, f"Нет данных {name} для {icao}", ha='center', va='center', fontsize=15)
+                self.ax.text(
+                    0.5, 0.5, 
+                    f"Нет данных {name} для {icao}", 
+                    ha='center', va='center', fontsize=15,
+                    transform=self.ax.transAxes
+                )
                 self.has_plot_data = False
         
         if self.has_plot_data == False:
@@ -879,7 +927,7 @@ class IcaoPlots:
             self.fig.canvas.draw_idle()
             return
         
-        # установка общих элементов: заголовок и сетка
+        # установка заголовока и сетки
         self.ax.set_title(title)
         self.ax.grid(True, linestyle='--', alpha=0.7)
 
@@ -890,10 +938,11 @@ class IcaoPlots:
             self.ax.set_aspect('equal', adjustable='datalim')
             self.ax.set_xlabel("Долгота (°)", fontsize=12)
             self.ax.set_ylabel("Широта (°)", fontsize=12)
+        
         # общие настройки для временных графиков
         else:
             self.ax.set_xlabel("Время (UTC)", fontsize=12)
-            # форматируем подписи на оси x для отображения времени
+            # отображение времени на оси x
             self.ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S.%f'))
 
             self.fig.canvas.draw()
@@ -904,7 +953,7 @@ class IcaoPlots:
                 self.ax.set_ylabel(label, fontsize=12)
                 self.ax.yaxis.labelpad = 17
         
-        # отображение легенды, если она есть
+        # отображение легенды
         if self.ax.get_legend_handles_labels()[0] and mode != 'altitude_speed_combined':
             self.ax.legend()
 
@@ -931,15 +980,14 @@ class IcaoPlots:
         
         # направление прокрутки
         if event.button == 'up':
-            scale_factor = 1 / base_scale # приближение
+            scale_factor = 1 / base_scale   # приближение
         elif event.button == 'down':
-            scale_factor = base_scale # отдаление
+            scale_factor = base_scale       # отдаление
         else:
             return
 
-        # логика для 2d-масштабирования карты
-        if mode == 'track' or mode == 'reg09_tracks' or mode == 'track_angle' \
-            or mode == 'gs_spd_angle' or mode == 'airspd_angle':
+        # 2d-масштабирование карты
+        if not mode.endswith('_hist'):
             cur_xlim = self.ax.get_xlim()
             cur_ylim = self.ax.get_ylim()
             xdata = event.xdata
@@ -953,7 +1001,7 @@ class IcaoPlots:
             rel_x = (cur_xlim[1] - xdata) / (cur_xlim[1] - cur_xlim[0])
             rel_y = (cur_ylim[1] - ydata) / (cur_ylim[1] - cur_ylim[0])
 
-            # устанавливаем новые пределы, центрируясь на курсоре
+            # установка новых пределов с центрированием на курсоре
             self.ax.set_xlim([xdata - new_width * (1 - rel_x), xdata + new_width * rel_x])
             self.ax.set_ylim([ydata - new_height * (1 - rel_y), ydata + new_height * rel_y])
         
@@ -968,7 +1016,7 @@ class IcaoPlots:
             # новые пределы для оси y
             self.ax.set_ylim([ydata - new_height * (1-rel_y), ydata + new_height * rel_y])
 
-        # обновляем график
+        # перерисовка графика
         self.fig.canvas.draw_idle()
 
     # навигация между бортами и графиками
